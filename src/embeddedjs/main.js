@@ -56,6 +56,23 @@ const render = new Poco(screen);
 const white = render.makeColor(255, 255, 255);
 const black = render.makeColor(0, 0, 0);
 
+let bgColor = white;
+let accentColor = black;
+let textColor = black;
+
+function packColor(value, sameValue, sameColor) {
+	if (typeof value !== "number" || value === sameValue)
+		return sameColor;
+	return render.makeColor((value >> 16) & 255, (value >> 8) & 255, value & 255);
+}
+
+function updateTheme() {
+	const theme = settings.theme || {};
+	bgColor = packColor(theme.background, 0xffffff, white);
+	accentColor = packColor(theme.accent, 0x000000, black);
+	textColor = packColor(theme.text, 0x000000, black);
+}
+
 const W = render.width;
 const H = render.height;
 const ROUND = screen.round;
@@ -75,41 +92,36 @@ const MENU_WIDTH = ROUND ? 150 : CONTENT_W;
 const fontTime = new render.Font("Roboto-Bold", 49);
 const fontSuffix = new render.Font("Gothic-Bold", 14);
 const fontStats = new render.Font("Gothic-Bold", 24);
-const fontStatsSmall = new render.Font("Gothic-Bold", 18);
 
-const menuSize = contentSize === 0 ? 14 : 18;
-const fontMenu = new render.Font("Gothic-Regular", menuSize);
-const fontMenuBold = new render.Font("Gothic-Bold", menuSize);
-const detailSize = contentSize === 0 ? 14 : 18;
-const fontTitle = new render.Font("Gothic-Bold", detailSize);
-const fontRow = new render.Font("Gothic-Regular", detailSize);
-const fontRowBold = new render.Font("Gothic-Bold", detailSize);
+const rowSize = contentSize === 0 ? 14 : 18;
+const fontRow = new render.Font("Gothic-Regular", rowSize);
+const fontRowBold = new render.Font("Gothic-Bold", rowSize);
 
 function centeredX(text, font) {
 	return CONTENT_CENTER - (render.getTextWidth(text, font) >> 1);
 }
 
 function drawCentered(text, font, y, color) {
-	render.drawText(text, font, color === undefined ? black : color, centeredX(text, font), y);
+	render.drawText(text, font, color === undefined ? textColor : color, centeredX(text, font), y);
 }
 
 function drawRight(text, font, right, y) {
-	render.drawText(text, font, black, right - render.getTextWidth(text, font), y);
+	render.drawText(text, font, textColor, right - render.getTextWidth(text, font), y);
 }
 
 function drawPause(x, y) {
-	render.fillRectangle(black, x, y, 4, 14);
-	render.fillRectangle(black, x + 8, y, 4, 14);
+	render.fillRectangle(textColor, x, y, 4, 14);
+	render.fillRectangle(textColor, x + 8, y, 4, 14);
 }
 
 function drawNoGps(x, y) {
 	const cx = x + 8;
 	const cy = y + 8;
 	for (let angle = 0; angle < 6.283; angle += 0.2)
-		render.drawPixel(black, Math.round(cx + Math.cos(angle) * 7), Math.round(cy + Math.sin(angle) * 7));
+		render.drawPixel(textColor, Math.round(cx + Math.cos(angle) * 7), Math.round(cy + Math.sin(angle) * 7));
 	for (let i = -5; i <= 5; i++) {
-		render.drawPixel(black, cx + i, cy + i);
-		render.drawPixel(black, cx + i + 1, cy + i);
+		render.drawPixel(textColor, cx + i, cy + i);
+		render.drawPixel(textColor, cx + i + 1, cy + i);
 	}
 }
 
@@ -130,20 +142,20 @@ function drawPeaks(cx, baseY, height) {
 	const rightCx = leftCx + Math.round(10.5 * scale);
 	const topY = baseY - height + 1;
 
-	drawTriangle(leftCx, baseY, leftHalf, height, black);
+	drawTriangle(leftCx, baseY, leftHalf, height, textColor);
 
 	const capTop = topY + Math.round(4 * scale);
 	const capHeight = Math.round(8 * scale);
 	const capHalf = Math.max(2, Math.round(3 * scale));
 	const capBase = capTop + capHeight - 1;
-	drawTriangle(leftCx, capBase, capHalf, capHeight, white);
+	drawTriangle(leftCx, capBase, capHalf, capHeight, bgColor);
 	const tooth = Math.max(1, Math.round(scale));
 	const gap = Math.max(1, Math.round(capHalf * 0.4));
-	render.fillRectangle(black, leftCx - gap, capBase - tooth - 1, tooth, tooth + 2);
-	render.fillRectangle(black, leftCx + gap, capBase - tooth, tooth, tooth + 1);
+	render.fillRectangle(textColor, leftCx - gap, capBase - tooth - 1, tooth, tooth + 2);
+	render.fillRectangle(textColor, leftCx + gap, capBase - tooth, tooth, tooth + 1);
 
-	drawTriangle(rightCx, baseY, rightHalf, rightHeight, black);
-	render.drawLine(rightCx, baseY - rightHeight + 1, rightCx - rightHalf, baseY, white, 1);
+	drawTriangle(rightCx, baseY, rightHalf, rightHeight, textColor);
+	render.drawLine(rightCx, baseY - rightHeight + 1, rightCx - rightHalf, baseY, bgColor, 1);
 }
 
 function drawStatusIcons() {
@@ -229,10 +241,10 @@ function drawMain() {
 	const x = CONTENT_CENTER - (totalWidth >> 1);
 	const y = (H - fontTime.height) >> 1;
 
-	render.drawText(clock.text, fontTime, black, x, y);
+	render.drawText(clock.text, fontTime, textColor, x, y);
 	if (clock.suffix) {
 		const baseline = y + fontTime.ascent;
-		render.drawText(clock.suffix, fontSuffix, black, x + digitWidth + gap,
+		render.drawText(clock.suffix, fontSuffix, textColor, x + digitWidth + gap,
 			baseline - fontSuffix.ascent);
 	}
 
@@ -241,7 +253,7 @@ function drawMain() {
 		Core.formatVertical(stats.vertical, settings.units);
 	let statsFont = fontStats;
 	if (render.getTextWidth(statsText, statsFont) > STATS_MAX)
-		statsFont = fontStatsSmall;
+		statsFont = fontRowBold;
 	drawCentered(statsText, statsFont, y + fontTime.height + 8);
 	drawStatusIcons();
 }
@@ -274,21 +286,20 @@ function detailData() {
 function drawDetail() {
 	const data = detailData();
 	const titleY = ROUND ? 34 : 12;
-	drawCentered(data[0], fontTitle, titleY);
-	const top = titleY + fontTitle.height + 10;
+	drawCentered(data[0], fontRowBold, titleY);
+	const top = titleY + fontRowBold.height + 10;
 	const rowHeight = fontRow.height + 8;
 	for (let i = 0; i < data[1].length; i++) {
 		const y = top + i * rowHeight;
-		render.drawText(data[1][i][0], fontRow, black, MARGIN, y);
+		render.drawText(data[1][i][0], fontRow, textColor, MARGIN, y);
 		drawRight(data[1][i][1], fontRowBold, DETAIL_RIGHT, y);
 	}
 }
 
-function drawChevron(cx, cy, up, color) {
-	const fill = color === undefined ? black : color;
+function drawChevron(cx, cy, up) {
 	for (let i = 0; i < 5; i++) {
 		const half = up ? i : 4 - i;
-		render.fillRectangle(fill, cx - half, cy + i, half * 2 + 1, 1);
+		render.fillRectangle(textColor, cx - half, cy + i, half * 2 + 1, 1);
 	}
 }
 
@@ -296,7 +307,7 @@ function drawMenu() {
 	const top = ROUND ? 26 : 2;
 	const left = MENU_LEFT;
 	const width = MENU_WIDTH;
-	const rowHeight = fontMenu.height + 10;
+	const rowHeight = fontRow.height + 10;
 	const listTop = top + 8;
 	const listBottom = H - 14;
 	let visible = Math.floor((listBottom - listTop) / rowHeight);
@@ -313,8 +324,8 @@ function drawMenu() {
 		const y = listTop + i * rowHeight;
 		const selected = index === menuIndex;
 		if (selected)
-			render.fillRectangle(black, left + 2, y + 1, 3, fontMenu.height - 2);
-		render.drawText(MENU[index].label(), selected ? fontMenuBold : fontMenu, black, left + 12, y);
+			render.fillRectangle(textColor, left + 2, y + 1, 3, fontRow.height - 2);
+		render.drawText(MENU[index].label(), selected ? fontRowBold : fontRow, textColor, left + 12, y);
 	}
 
 	if (menuScroll > 0)
@@ -341,30 +352,30 @@ function drawBarMountain(cx, cy) {
 		const right = Math.round(cx + 5 + 3 * t);
 		render.fillRectangle(white, left, y, right - left + 1, 1);
 	}
-	// Black separator where the right peak crosses the left.
+	// Bar-coloured separator where the right peak crosses the left.
 	for (let y = cy - 2; y <= cy + 7; y++) {
 		const t = (y - (cy - 2)) / 9;
-		render.drawPixel(black, Math.round(cx + 5 - 3 * t), y);
+		render.drawPixel(accentColor, Math.round(cx + 5 - 3 * t), y);
 	}
 }
 
 function drawBarCalendar(cx, cy) {
 	render.fillRectangle(white, cx - 7, cy - 5, 14, 12);
-	render.fillRectangle(black, cx - 7, cy - 2, 14, 1);
-	render.fillRectangle(black, cx - 4, cy - 5, 1, 3);
-	render.fillRectangle(black, cx + 3, cy - 5, 1, 3);
-	render.fillRectangle(black, cx - 1, cy + 2, 2, 2);
+	render.fillRectangle(accentColor, cx - 7, cy - 2, 14, 1);
+	render.fillRectangle(accentColor, cx - 4, cy - 5, 1, 3);
+	render.fillRectangle(accentColor, cx + 3, cy - 5, 1, 3);
+	render.fillRectangle(accentColor, cx - 1, cy + 2, 2, 2);
 }
 
 function drawBarSeason(cx, cy) {
 	// Back page.
 	render.fillRectangle(white, cx - 7, cy - 6, 12, 10);
-	render.fillRectangle(black, cx - 7, cy - 3, 12, 1);
-	// Front page with a black outline so it separates from the back page.
-	render.fillRectangle(black, cx - 3, cy - 2, 12, 10);
+	render.fillRectangle(accentColor, cx - 7, cy - 3, 12, 1);
+	// Front page with a bar-coloured outline so it separates from the back page.
+	render.fillRectangle(accentColor, cx - 3, cy - 2, 12, 10);
 	render.fillRectangle(white, cx - 2, cy - 1, 10, 8);
-	render.fillRectangle(black, cx - 2, cy + 1, 10, 1);
-	render.fillRectangle(black, cx + 2, cy + 4, 2, 2);
+	render.fillRectangle(accentColor, cx - 2, cy + 1, 10, 1);
+	render.fillRectangle(accentColor, cx + 2, cy + 4, 2, 2);
 }
 
 function drawBarMore(cx, cy) {
@@ -441,11 +452,11 @@ function drawActionBar() {
 			const left = cx - Math.sqrt(radius * radius - dy * dy);
 			const start = Math.max(BAR_LEFT, Math.ceil(left));
 			if (start < W)
-				render.fillRectangle(black, start, y, W - start, 1);
+				render.fillRectangle(accentColor, start, y, W - start, 1);
 		}
 	}
 	else {
-		render.fillRectangle(black, BAR_LEFT, 0, BAR_W, H);
+		render.fillRectangle(accentColor, BAR_LEFT, 0, BAR_W, H);
 	}
 
 	let icons;
@@ -471,7 +482,7 @@ function draw() {
 	frameDay = currentScreen === "today" ? displayedDay() : null;
 	frameSeason = currentScreen === "season" ? displayedSeason() : null;
 	render.begin();
-	render.fillRectangle(white, 0, 0, W, H);
+	render.fillRectangle(bgColor, 0, 0, W, H);
 	drawActionBar();
 	if (menuOpen)
 		drawMenu();
@@ -817,6 +828,7 @@ function applySettings(json) {
 		const next = JSON.parse(json);
 		store.setSettings(next);
 		settings = store.getSettings();
+		updateTheme();
 		detector.setOptions(settings.detection);
 		history.season = {};
 		if (currentScreen === "season") {
@@ -1053,6 +1065,7 @@ watch.addEventListener("didFocus", inFocus => {
 /* Start                                                               */
 /* ------------------------------------------------------------------ */
 
+updateTheme();
 setupMessage();
 updateAll();
 

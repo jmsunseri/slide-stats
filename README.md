@@ -42,10 +42,12 @@ A working first version:
   second watch cannot double-count
 - Local dashboard: Today, Trips, Season, Settings, with live metric/imperial conversion
   for units and lift-detection thresholds
+- Three-colour theme from the phone settings: background, accent for the right-hand bar,
+  and text/font colour
 - Metric by default
 
-Not done yet: real-world threshold tuning, accelerometer-gated GPS, backcountry mode
-(issue #1), and bar/text colour presets (issue #2).
+Not done yet: real-world threshold tuning, accelerometer-gated GPS, and backcountry mode
+(issue #1).
 
 ## Using it
 
@@ -58,6 +60,10 @@ Not done yet: real-world threshold tuning, accelerometer-gated GPS, backcountry 
 - Today's totals are read live from the watch. Past days and all seasons come from the
   phone, which keeps the full history and answers one summary at a time. The watch
   prefetches only the selected summary's immediate neighbours.
+- **Theme:** the phone settings page has Background, Accent, and Text colour fields. They
+  use the phone's native colour picker and snap to the watch's 64-colour palette. Accent
+  colours the right-hand bar; its icons stay white, so pick a dark accent. Text colours
+  the clock, rows, menu, and mountain mark; the background also fills the snow cap.
 
 ## Screens
 
@@ -80,6 +86,12 @@ Not done yet: real-world threshold tuning, accelerometer-gated GPS, backcountry 
 | More |
 | --- |
 | ![More menu](docs/images/gabbro/menu.png) |
+
+### Theme example
+
+![Blue background, orange bar, white text](docs/images/theme-example.png)
+
+Background `#0055aa`, accent `#ffaa00`, text `#ffffff`.
 
 ### App icon
 
@@ -119,8 +131,8 @@ then Select again.
 The detector, season keys, day store, and formatting live in
 `src/embeddedjs/lib/core.js`; phone-side aggregation, trip maths, and summaries are in
 `src/pkjs/lib/stats.js`.
-There are 49 tests, including the phone sync/query handlers. Run them with Node 22 or
-newer:
+There are 52 tests, including the phone sync/query handlers and dashboard colour fields.
+Run them with Node 22 or newer:
 
 ```sh
 node --test test/*.test.mjs
@@ -159,6 +171,8 @@ removed to keep the app bundle inside the watch's archive mapping limit.
   vertical gain are shown.
 - The dashboard requires the watch app to be running, because that is when PebbleKit JS
   is alive. The mobile app launches the watch app when the settings gear is tapped.
+- The action-bar icons stay white at every accent colour, so a light accent leaves them
+  low-contrast; pick a dark accent.
 - The phone must keep feeding GPS while the watch app is open. Background-location
   behaviour on iOS is the first thing to verify on snow.
 - The GPS stream stays open for the session; the settings interval controls how often the

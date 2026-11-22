@@ -132,10 +132,22 @@ test("day query returns totals and adjacent keys", () => {
 test("settings round-trip through the phone", () => {
 	const { handlers, sent, storage } = loadPkjs();
 	handlers.ready({});
-	send(handlers, { Settings: JSON.stringify({ units: "imperial", seasonMode: "south" }) });
-	assert.deepEqual(JSON.parse(storage.get("ss.settings")), { units: "imperial", seasonMode: "south" });
+	send(handlers, { Settings: JSON.stringify({
+		units: "imperial",
+		seasonMode: "south",
+		theme: { background: 0x0055aa, accent: 0xffaa00, text: 0xffffff },
+	}) });
+	assert.deepEqual(JSON.parse(storage.get("ss.settings")), {
+		units: "imperial",
+		seasonMode: "south",
+		theme: { background: 0x0055aa, accent: 0xffaa00, text: 0xffffff },
+	});
 
 	// A later ready should push the stored settings back to the watch.
 	handlers.ready({});
-	assert.equal(JSON.parse(sent.at(-1).Settings).units, "imperial");
+	const restored = sent
+		.filter(message => message.Settings)
+		.map(message => JSON.parse(message.Settings))
+		.find(settings => settings.units === "imperial");
+	assert.equal(restored.units, "imperial");
 });

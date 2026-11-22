@@ -178,6 +178,14 @@ function seasonSection(summary, units) {
 		"</div></section>";
 }
 
+function colorHex(value, fallback) {
+	const number = typeof value === "number"
+		? value
+		: parseInt(String(value || "").replace("#", ""), 16);
+	const safe = isFinite(number) ? number : fallback;
+	return "#" + ("000000" + safe.toString(16)).slice(-6);
+}
+
 function option(value, current) {
 	return '<option value="' + value + '"' + (value === current ? " selected" : "") + ">" +
 		value.charAt(0).toUpperCase() + value.slice(1) + "</option>";
@@ -186,6 +194,7 @@ function option(value, current) {
 function settingsSection(settings) {
 	const s = settings;
 	const d = s.detection || {};
+	const theme = s.theme || {};
 	const imperial = s.units === "imperial";
 	const gainUnit = imperial ? "ft" : "m";
 	const speedUnit = imperial ? "mph" : "km/h";
@@ -207,6 +216,17 @@ function settingsSection(settings) {
 		'<input type="checkbox" id="vibration"' + (s.vibration ? " checked" : "") + '></div>' +
 		'<div class="field switch"><label for="trips">Show trips</label>' +
 		'<input type="checkbox" id="trips"' + (s.trips !== false ? " checked" : "") + '></div>' +
+		'<h2>Theme</h2>' +
+		'<div class="field-row"><div class="field"><label for="themeBackground">Background</label>' +
+		'<input type="color" id="themeBackground" value="' + colorHex(theme.background, 0xffffff) + '">' +
+		'<span class="color-value" id="themeBackgroundWatch"></span></div>' +
+		'<div class="field"><label for="themeAccent">Accent</label>' +
+		'<input type="color" id="themeAccent" value="' + colorHex(theme.accent, 0x000000) + '">' +
+		'<span class="color-value" id="themeAccentWatch"></span></div></div>' +
+		'<div class="field"><label for="themeText">Text and menu</label>' +
+		'<input type="color" id="themeText" value="' + colorHex(theme.text, 0x000000) + '">' +
+		'<span class="color-value" id="themeTextWatch"></span></div>' +
+		'<p class="hint">Picks snap to the watch\'s 64-colour palette. Accent colours the right-hand bar; its icons stay white, so pick a dark accent. Text colours the clock, rows, menu, and mountain mark.</p>' +
 		'<h2>Season</h2><div class="field"><label for="seasonMode">Hemisphere</label>' +
 		'<select id="seasonMode">' +
 		'<option value="north"' + (s.seasonMode !== "south" ? " selected" : "") + '>Northern (Sep–Aug)</option>' +
@@ -285,6 +305,8 @@ tr:last-child td{border-bottom:0}
 .field{margin-bottom:12px}
 .field label{display:block;color:var(--muted);font-size:13px;margin-bottom:5px}
 select,input[type=number]{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:10px;background:#fff;font:inherit;color:var(--ink)}
+input[type=color]{width:100%;height:46px;padding:4px;border:1px solid var(--line);border-radius:10px;background:#fff}
+.color-value{display:block;color:var(--muted);font-size:12px;margin-top:4px}
 .field-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .switch{display:flex;align-items:center;justify-content:space-between;gap:12px;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px}
 .switch label{margin:0}
@@ -315,6 +337,35 @@ ${settingsSection(settings)}
       for (var k = 0; k < panels.length; k++) panels[k].classList.toggle("active", panels[k].getAttribute("data-panel") === name);
     });
   }
+  var colors = [
+    ["themeBackground", "#ffffff"],
+    ["themeAccent", "#000000"],
+    ["themeText", "#000000"]
+  ];
+  function snapColor(value, fallback) {
+    var hex = String(value || "").replace("#", "").toLowerCase();
+    if (!/^[0-9a-f]{6}$/.test(hex)) return fallback;
+    function level(part) { return part < 43 ? 0 : part < 128 ? 85 : part < 213 ? 170 : 255; }
+    function two(part) { return (part < 16 ? "0" : "") + part.toString(16); }
+    var r = level(parseInt(hex.slice(0, 2), 16));
+    var g = level(parseInt(hex.slice(2, 4), 16));
+    var b = level(parseInt(hex.slice(4, 6), 16));
+    return "#" + two(r) + two(g) + two(b);
+  }
+  function packColor(value, fallback) {
+    return parseInt(snapColor(value, fallback).slice(1), 16);
+  }
+  for (var c = 0; c < colors.length; c++) {
+    (function(id, fallback){
+      var input = document.getElementById(id);
+      var label = document.getElementById(id + "Watch");
+      function refresh() { label.textContent = "Watch " + snapColor(input.value, fallback); }
+      input.value = snapColor(input.value, fallback);
+      input.addEventListener("input", refresh);
+      input.addEventListener("change", function(){ input.value = snapColor(input.value, fallback); refresh(); });
+      refresh();
+    })(colors[c][0], colors[c][1]);
+  }
   var units = document.getElementById("units");
   units.addEventListener("change", function(){
     var panel = document.querySelector('[data-panel="settings"]');
@@ -344,6 +395,11 @@ ${settingsSection(settings)}
     s.vibration = document.getElementById("vibration").checked;
     s.trips = document.getElementById("trips").checked;
     s.seasonMode = document.getElementById("seasonMode").value;
+    s.theme = {
+      background: packColor(document.getElementById("themeBackground").value, "#ffffff"),
+      accent: packColor(document.getElementById("themeAccent").value, "#000000"),
+      text: packColor(document.getElementById("themeText").value, "#000000")
+    };
     delete s.seasonStartMonth;
     delete s.seasonStartDay;
     s.sampleIntervalMs = Number(document.getElementById("sampleIntervalMs").value) * 1000;

@@ -19,6 +19,11 @@ const DEFAULT_SETTINGS = {
 	sampleIntervalMs: 10000,
 	seasonMode: "north",
 	trips: true,
+	theme: {
+		background: 0xffffff,
+		accent: 0x000000,
+		text: 0x000000,
+	},
 	detection: {
 		fastGainM: 10,
 		fastWindowMs: 30000,

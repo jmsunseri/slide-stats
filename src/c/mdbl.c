@@ -5,10 +5,11 @@ int main(void) {
   window_stack_push(w, true);
 
   // Poco plus the app modules need more than the default 32 kB engine pool.
+  // 45,568 is the largest slot that maps this archive; 46,080 fails.
   ModdableCreationRecord cr = {
     .recordSize = sizeof(cr),
     .stack = 6144,
-    .slot = 45056,
+    .slot = 45568,
     .chunk = 28672,
 #ifdef PBL_DEBUG
     .flags = kModdableCreationFlagDebug,
