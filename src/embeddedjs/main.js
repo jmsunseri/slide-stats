@@ -4,9 +4,7 @@ import Vibes from "pebble/vibes";
 import Location from "embedded:sensor/Location";
 import Message from "pebble/message";
 
-import { createLiftDetector } from "detector";
-import { createDayStore } from "day-store";
-import * as Format from "format";
+import * as Core from "core";
 
 const VERSION = "0.1.0";
 const DEBUG = true;
@@ -18,9 +16,9 @@ const storage = {
 	setItem: (key, value) => localStorage.setItem(key, value),
 };
 
-let store = createDayStore({ storage }).load();
+let store = Core.createDayStore({ storage }).load();
 let settings = store.getSettings();
-let detector = createLiftDetector(settings.detection);
+let detector = Core.createLiftDetector(settings.detection);
 let location = null;
 let message = null;
 let messageReady = false;
@@ -89,20 +87,20 @@ function statusText() {
 
 function drawMain() {
 	const stats = store.todayStats();
-	drawCentered(Format.formatTime(new Date(), watch.hour12), fontTime, ROUND ? 30 : 14);
+	drawCentered(Core.formatTime(new Date(), watch.hour12), fontTime, ROUND ? 30 : 14);
 
 	let altitude;
 	let statsText;
 	if (store.hasBase()) {
-		altitude = Format.formatAltitude(lastAltitude, settings.units);
+		altitude = Core.formatAltitude(lastAltitude, settings.units);
 		const runs = stats.runs + (stats.runs === 1 ? " RUN  " : " RUNS  ");
-		statsText = runs + Format.formatVertical(stats.vertical, settings.units);
+		statsText = runs + Core.formatVertical(stats.vertical, settings.units);
 	}
 	else {
 		altitude = "SET BASE";
 		statsText = lastAltitude === null
 			? "WAITING FOR GPS"
-			: Format.formatAltitude(lastAltitude, settings.units) + "  SELECT";
+			: Core.formatAltitude(lastAltitude, settings.units) + "  SELECT";
 	}
 	drawCentered(altitude, fontAltitude, ROUND ? 88 : 70);
 	drawCentered(statsText, fontStats, ROUND ? 126 : 108);
@@ -114,12 +112,12 @@ function detailRows() {
 	const units = settings.units;
 	if (currentScreen === "today") {
 		return ["TODAY", [
-			["Vertical", Format.formatVertical(stats.vertical, units)],
+			["Vertical", Core.formatVertical(stats.vertical, units)],
 			["Runs", String(stats.runs)],
-			["First", stats.first ? Format.formatTime(new Date(stats.first), watch.hour12) : "--"],
-			["Last", stats.last ? Format.formatTime(new Date(stats.last), watch.hour12) : "--"],
-			["Average", Format.formatAverage(stats.average, units)],
-			["Longest", Format.formatVertical(stats.longest, units)],
+			["First", stats.first ? Core.formatTime(new Date(stats.first), watch.hour12) : "--"],
+			["Last", stats.last ? Core.formatTime(new Date(stats.last), watch.hour12) : "--"],
+			["Average", Core.formatAverage(stats.average, units)],
+			["Longest", Core.formatVertical(stats.longest, units)],
 		]];
 	}
 	if (currentScreen === "season") {
@@ -127,10 +125,10 @@ function detailRows() {
 		return ["SEASON", [
 			["Season", season.label],
 			["Days", String(season.days)],
-			["Vertical", Format.formatVertical(season.vertical, units)],
+			["Vertical", Core.formatVertical(season.vertical, units)],
 			["Runs", String(season.runs)],
-			["Avg / day", Format.formatAverage(season.averageVertical, units)],
-			["Best day", season.bestDay ? Format.formatDateShort(season.bestDay.date) : "--"],
+			["Avg / day", Core.formatAverage(season.averageVertical, units)],
+			["Best day", season.bestDay ? Core.formatDateShort(season.bestDay.date) : "--"],
 		]];
 	}
 	return ["ABOUT", [
@@ -520,12 +518,15 @@ function startMockLift() {
 	let altitude = 2000;
 	let direction = 1;
 	let timestamp = Date.now();
+	statusNoGps = false;
+	lastAltitude = altitude;
 	if (mockTimer)
 		clearInterval(mockTimer);
 	mockTimer = setInterval(() => {
 		timestamp += 1000;
-		altitude += direction * 2;
-		if (altitude >= 2160)
+		altitude += direction * 10;
+		lastAltitude = altitude;
+		if (altitude >= 2100)
 			direction = -1;
 		if (direction < 0 && altitude <= 2000) {
 			clearInterval(mockTimer);
@@ -538,9 +539,7 @@ function startMockLift() {
 			speed: 4,
 		}));
 	}, 1000);
-	if (!location)
-		startGps();
-	updateAll();
+	draw();
 }
 
 function activateMenu() {
@@ -644,7 +643,7 @@ new Button({
 			cycleScreen(1);
 		}
 		else if (type === "select") {
-			if (currentScreen === "main" && !store.hasBase())
+			if (currentScreen === "main" && !store.hasBase() && lastAltitude !== null)
 				setBase();
 			else
 				openMenu();

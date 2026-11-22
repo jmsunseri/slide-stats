@@ -11,7 +11,7 @@ import {
 	formatAverage,
 	toFeet,
 	fromFeet,
-} from "../src/embeddedjs/lib/format.js";
+} from "../src/embeddedjs/lib/core.js";
 
 test("thousands grouping handles negatives and short values", () => {
 	assert.equal(groupThousands(0), "0");

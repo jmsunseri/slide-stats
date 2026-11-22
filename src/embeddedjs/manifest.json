@@ -5,9 +5,6 @@
 	],
 	"modules": {
 		"*": "./main",
-		"detector": "./lib/detector.js",
-		"day-store": "./lib/day-store.js",
-		"season": "./lib/season.js",
-		"format": "./lib/format.js"
+		"core": "./lib/core.js"
 	}
 }

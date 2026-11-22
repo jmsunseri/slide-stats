@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDayStore, STATE_KEY, DEFAULT_SETTINGS } from "../src/embeddedjs/lib/day-store.js";
-import { dayKey } from "../src/embeddedjs/lib/season.js";
+import { createDayStore, STATE_KEY, DEFAULT_SETTINGS, dayKey } from "../src/embeddedjs/lib/core.js";
 
 function memoryStorage() {
 	const map = new Map();

@@ -2,9 +2,13 @@
   "name": "slide-stats",
   "author": "Justin Sunseri",
   "version": "0.1.0",
-  "keywords": ["pebble-app"],
+  "keywords": [
+    "pebble-app"
+  ],
   "private": false,
-  "dependencies": {},
+  "dependencies": {
+    "@moddable/pebbleproxy": "^0.2.2"
+  },
   "pebble": {
     "displayName": "Slide Stats",
     "uuid": "4c1de612-6315-44c4-9789-2dfdfed5186a",

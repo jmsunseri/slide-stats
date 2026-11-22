@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createLiftDetector } from "../src/embeddedjs/lib/detector.js";
+import { createLiftDetector } from "../src/embeddedjs/lib/core.js";
 
 const DT = 10000;
 

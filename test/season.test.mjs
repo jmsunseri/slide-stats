@@ -8,7 +8,7 @@ import {
 	seasonLabel,
 	groupTrips,
 	summarize,
-} from "../src/embeddedjs/lib/season.js";
+} from "../src/embeddedjs/lib/core.js";
 
 const north = { seasonMode: "north" };
 const south = { seasonMode: "south" };
