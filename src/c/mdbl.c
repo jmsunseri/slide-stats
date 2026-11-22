@@ -4,7 +4,7 @@ int main(void) {
   Window *w = window_create();
   window_stack_push(w, true);
 
-  // Piu plus the app modules need more than the default 32 kB engine pool.
+  // Poco plus the app modules need more than the default 32 kB engine pool.
   ModdableCreationRecord cr = {
     .recordSize = sizeof(cr),
     .stack = 6144,

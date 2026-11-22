@@ -9,7 +9,6 @@ import * as Core from "core";
 const VERSION = "0.1.0";
 const DEBUG = true;
 const PROCESS_MS = 10000;
-const GPS_DRAW_MS = 5000;
 
 const storage = {
 	getItem: key => localStorage.getItem(key),
@@ -29,7 +28,7 @@ let statusNoGps = false;
 let lastAltitude = null;
 let recentAltitudes = [];
 let lastProcessed = 0;
-let lastDraw = 0;
+let lastPromptAltitude = null;
 let mockTimer = null;
 
 let menuOpen = false;
@@ -160,7 +159,6 @@ function drawMenu() {
 }
 
 function draw() {
-	lastDraw = Date.now();
 	render.begin();
 	render.fillRectangle(white, 0, 0, W, H);
 	if (menuOpen)
@@ -278,8 +276,13 @@ function handleSample(sample) {
 	}
 
 	if (!store.hasBase() || settings.paused || isDayClosed()) {
-		if (statusNoGps !== wasNoGps || Date.now() - lastDraw > GPS_DRAW_MS)
+		if (statusNoGps !== wasNoGps)
 			draw();
+		else if (!store.hasBase() && lastAltitude !== null &&
+			(lastPromptAltitude === null || Math.abs(lastAltitude - lastPromptAltitude) >= 5)) {
+			lastPromptAltitude = lastAltitude;
+			draw();
+		}
 		return;
 	}
 
@@ -450,6 +453,7 @@ function setBase() {
 	detector.reset();
 	onLift = false;
 	lastProcessed = 0;
+	lastPromptAltitude = null;
 	if (!location)
 		startGps();
 	updateAll();
@@ -657,7 +661,10 @@ new Button({
 	},
 });
 
-watch.addEventListener("minutechange", draw);
+watch.addEventListener("minutechange", () => {
+	if (!menuOpen && currentScreen === "main")
+		draw();
+});
 
 watch.addEventListener("daychange", () => {
 	const result = store.ensureToday(true);

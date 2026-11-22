@@ -125,6 +125,19 @@ function tripsSection(summary, units) {
 	return html + "</section>";
 }
 
+function daysTable(days, units) {
+	if (!days.length)
+		return "";
+	let rows = "";
+	for (const day of days) {
+		rows += "<tr><td>" + fmtDay(day.date) + "</td>" +
+			'<td class="num">' + fmtSigned(day.v, units) + "</td>" +
+			'<td class="num">' + day.r + "</td></tr>";
+	}
+	return '<h2>Days</h2><table><thead><tr><th>Day</th><th class="num">Vertical</th><th class="num">Runs</th></tr></thead><tbody>' +
+		rows + "</tbody></table>";
+}
+
 function chart(series, units) {
 	if (series.length < 2)
 		return "";
@@ -147,8 +160,9 @@ function chart(series, units) {
 function seasonSection(summary, units) {
 	const season = summary.season;
 	const all = summary.allTime;
+	const heroLabel = season.label === "All time" ? "ALL TIME" : esc(season.label) + " SEASON";
 	return '<section class="panel" data-panel="season">' +
-		'<div class="hero"><div class="hero-label">' + esc(season.label) + ' SEASON</div>' +
+		'<div class="hero"><div class="hero-label">' + heroLabel + '</div>' +
 		'<div class="hero-value">' + fmtSigned(season.vertical, units) + '</div>' +
 		'<div class="hero-sub">' + season.daysCount + (season.daysCount === 1 ? " ski day" : " ski days") + '</div></div>' +
 		'<div class="grid">' +
@@ -156,7 +170,7 @@ function seasonSection(summary, units) {
 		'<div class="stat"><span>Average / day</span><b>' + fmtDist(season.averageVertical, units) + '</b></div>' +
 		'<div class="stat"><span>Best day</span><b>' + (season.bestDay ? fmtDate(season.bestDay.date) : "--") + '</b></div>' +
 		'<div class="stat"><span>Trips</span><b>' + season.trips.length + '</b></div>' +
-		"</div>" + chart(season.series, units) +
+		"</div>" + chart(season.series, units) + daysTable(summary.days, units) +
 		'<h2>All time</h2><div class="grid">' +
 		'<div class="stat"><span>Vertical</span><b>' + fmtSigned(all.vertical, units) + '</b></div>' +
 		'<div class="stat"><span>Ski days</span><b>' + all.daysCount + '</b></div>' +
@@ -234,6 +248,7 @@ function renderBundle(options) {
 	const generatedText = MONTHS[generated.getMonth()] + " " + generated.getDate() + ", " +
 		pad2(generated.getHours()) + ":" + pad2(generated.getMinutes());
 	const showTrips = settings.trips !== false;
+	const seasonLine = summary.season.label === "All time" ? "All time" : summary.season.label + " season";
 
 	return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8">
@@ -288,7 +303,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:22px 10px}
 @media (min-width:560px){.grid{grid-template-columns:repeat(4,1fr)}}
 </style></head>
 <body>
-<header><h1>Slide Stats</h1><p>${esc(summary.season.label)} season · updated ${esc(generatedText)}</p></header>
+<header><h1>Slide Stats</h1><p>${esc(seasonLine)} · updated ${esc(generatedText)}</p></header>
 <main>
 <nav><button class="on" data-tab="today">Today</button>${showTrips ? '<button data-tab="trips">Trips</button>' : ""}<button data-tab="season">Season</button><button data-tab="settings">Settings</button></nav>
 ${todaySection(summary, units)}

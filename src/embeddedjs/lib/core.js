@@ -340,8 +340,11 @@ function seasonStart(settings = {}) {
 	const mode = settings.seasonMode || "north";
 	if (mode === "south")
 		return { month: 3, day: 1 };
-	if (mode === "custom")
-		return { month: settings.seasonStartMonth || 9, day: settings.seasonStartDay || 1 };
+	if (mode === "custom") {
+		const month = settings.seasonStartMonth || 9;
+		const lastDay = month === 2 ? 28 : new Date(2000, month, 0).getDate();
+		return { month, day: Math.min(settings.seasonStartDay || 1, lastDay) };
+	}
 	return { month: 9, day: 1 };
 }
 
