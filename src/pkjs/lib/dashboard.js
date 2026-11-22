@@ -223,7 +223,7 @@ function settingsSection(settings, summary) {
 		'<div class="field"><label for="seasonStartDay">Day</label>' +
 		'<select id="seasonStartDay">' + dayOptions(s.seasonStartDay || 1) + "</select></div></div>" +
 		'<h2>Lift detection</h2>' +
-		'<div class="field"><label for="sampleIntervalMs">GPS sample interval (seconds)</label>' +
+		'<div class="field"><label for="sampleIntervalMs">Altitude processing interval (seconds)</label>' +
 		'<input type="number" id="sampleIntervalMs" min="5" max="60" step="1" value="' + Math.round((s.sampleIntervalMs || 10000) / 1000) + '"></div>' +
 		'<div class="field-row"><div class="field"><label for="minLiftGainM">Minimum lift gain (m)</label>' +
 		'<input type="number" id="minLiftGainM" min="5" max="50" step="1" value="' + (d.minLiftGainM || 10) + '"></div>' +
@@ -235,7 +235,7 @@ function settingsSection(settings, summary) {
 		'<input type="number" id="slowWindowMs" min="60" max="180" step="10" value="' + Math.round((d.slowWindowMs || 90000) / 1000) + '"></div></div>' +
 		'<div class="field"><label for="maxSpeedMps">Maximum speed (m/s)</label>' +
 		'<input type="number" id="maxSpeedMps" min="0" max="15" step="1" value="' + (d.maxSpeedMps || 8) + '"></div>' +
-		'<p class="hint">The minimum gain is also the detection threshold. Changing these affects future lifts, not past ones.</p>' +
+		'<p class="hint">The minimum gain is also the detection threshold. Changing these affects future lifts, not past ones. The GPS stream stays open for the session; this interval controls how often the watch evaluates it.</p>' +
 		'<button id="save">Save settings</button>' +
 		'<p class="hint">Stats are stored on this phone. Open Slide Stats on the watch before syncing.</p>' +
 		'<script type="application/json" id="settings-data">' + json + "</script>" +

@@ -44,7 +44,7 @@ still needs a decision.
   v1. Stats: vertical, runs, first/last lift, average per run, longest run, days, best
   day, trip counts, averages per day, daily bar chart.
 - **Settings split:** quick items on the watch (pause, end day, undo last lift, units,
-  vibration, sync now); season setup, GPS sample interval, detection thresholds, trips
+  vibration, sync now); season setup, altitude processing interval, detection thresholds, trips
   toggle, and the dashboard on the phone.
 
 ## Main screen
