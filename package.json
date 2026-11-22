@@ -1,0 +1,35 @@
+{
+  "name": "slide-stats",
+  "author": "Justin Sunseri",
+  "version": "0.1.0",
+  "keywords": ["pebble-app"],
+  "private": false,
+  "dependencies": {},
+  "pebble": {
+    "displayName": "Slide Stats",
+    "uuid": "4c1de612-6315-44c4-9789-2dfdfed5186a",
+    "projectType": "moddable",
+    "sdkVersion": "3",
+    "enableMultiJS": true,
+    "targetPlatforms": [
+      "emery",
+      "gabbro"
+    ],
+    "capabilities": [
+      "location",
+      "configurable"
+    ],
+    "watchapp": {
+      "watchface": false
+    },
+    "messageKeys": [
+      "Sync",
+      "Ack",
+      "Settings",
+      "Summary"
+    ],
+    "resources": {
+      "media": []
+    }
+  }
+}
