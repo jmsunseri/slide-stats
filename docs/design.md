@@ -144,7 +144,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 
 ## Implementation notes
 
-- One core module holds the detector, season/trip maths, day store, and formatting. Alloy
+- One core module holds the detector, season keys, day store, and formatting. Alloy
   charges memory per module; four modules plus Piu exceeded the watch's engine heap.
 - The UI is drawn with **Poco**, not Piu. It is a small, redraw-on-change interface, and
   Poco costs far less RAM on a 128 kB app heap.
