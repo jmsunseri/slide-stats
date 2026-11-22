@@ -29,8 +29,7 @@
     "messageKeys": [
       "Sync",
       "Ack",
-      "Settings",
-      "Summary"
+      "Settings"
     ],
     "resources": {
       "media": []
