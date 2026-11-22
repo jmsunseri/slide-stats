@@ -99,8 +99,10 @@ Centred vertical stack, no decoration, same layout on both screens:
 
 ## Testing
 
-- Detection, season/trip maths, persistence, and formatting are one pure module,
-  `src/embeddedjs/lib/core.js`, with 46 Node tests.
+- Detection, season/trip maths, persistence, and formatting live in one pure watch module,
+  `src/embeddedjs/lib/core.js`; phone-side aggregation lives in `src/pkjs/lib/stats.js`.
+  Together they have 52 Node tests, including cross-checks that both season/trip
+  implementations agree.
 - Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, car climb,
   noisy GPS, missing altitude, long sample gap, day rollover.
 - The More menu carries **Debug: Mock Lift** while `DEBUG` is true, feeding a synthetic
@@ -126,7 +128,7 @@ Centred vertical stack, no decoration, same layout on both screens:
 ## Implementation status
 
 - [x] Alloy project scaffolded for emery + gabbro
-- [x] Pure detector, season/trip maths, day store, formatting with 46 Node tests
+- [x] Watch core and phone stats with 52 Node tests
 - [x] Poco screens and More menu on both form factors
 - [x] Sync protocol, PKJS store, and ack/dedupe
 - [x] Local dashboard with Today / Trips / Season / Settings

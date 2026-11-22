@@ -10,6 +10,10 @@ phone, where a fully local dashboard shows day, trip, and season statistics.
 Built with [Alloy](https://developer.repebble.com/guides/alloy/), the Pebble JavaScript
 framework, and drawn with Poco for a small memory footprint and infrequent redraws.
 
+| Emery | Gabbro | Phone dashboard |
+| --- | --- | --- |
+| ![Emery main screen](docs/images/emery-main.png) | ![Gabbro main screen](docs/images/gabbro-main.png) | ![Dashboard](docs/images/dashboard.jpg) |
+
 ## Platform support
 
 Alloy runs only on **Emery (Pebble Time 2)** and **Gabbro (Pebble Round 2)**. Those are
