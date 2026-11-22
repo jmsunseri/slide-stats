@@ -8,8 +8,8 @@ int main(void) {
   ModdableCreationRecord cr = {
     .recordSize = sizeof(cr),
     .stack = 6144,
-    .slot = 40960,
-    .chunk = 24576,
+    .slot = 45056,
+    .chunk = 28672,
 #ifdef PBL_DEBUG
     .flags = kModdableCreationFlagDebug,
 #endif

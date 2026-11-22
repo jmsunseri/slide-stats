@@ -6,7 +6,6 @@ import Message from "pebble/message";
 
 import * as Core from "core";
 
-const VERSION = "0.1.0";
 const DEBUG = true;
 
 // The system Text Size preference. The FFI shim returns 0..3; default to Large.
@@ -53,10 +52,20 @@ const W = render.width;
 const H = render.height;
 const ROUND = screen.round;
 const MARGIN = ROUND ? 40 : 6;
-const MENU_MARGIN = ROUND ? 55 : 0;
+
+// Native action-bar geometry from the Pebble firmware.
+const BAR_W = ROUND ? 40 : 34;
+const BAR_MARGIN = ROUND ? 80 : 45;
+const BAR_LEFT = W - BAR_W;
+const CONTENT_W = ROUND ? W : W - BAR_W;
+const CONTENT_CENTER = ROUND ? (W >> 1) : (CONTENT_W >> 1);
+const DETAIL_RIGHT = ROUND ? W - 50 : CONTENT_W - MARGIN;
+const STATS_MAX = ROUND ? 180 : CONTENT_W - 12;
+const MENU_LEFT = ROUND ? 55 : 0;
+const MENU_WIDTH = ROUND ? 150 : CONTENT_W;
 
 const fontTime = new render.Font("Roboto-Bold", 49);
-const fontSuffix = new render.Font("Gothic-Bold", 18);
+const fontSuffix = new render.Font("Gothic-Bold", 14);
 const fontStats = new render.Font("Gothic-Bold", 24);
 const fontStatsSmall = new render.Font("Gothic-Bold", 18);
 
@@ -69,7 +78,7 @@ const fontRow = new render.Font("Gothic-Regular", detailSize);
 const fontRowBold = new render.Font("Gothic-Bold", detailSize);
 
 function centeredX(text, font) {
-	return (W - render.getTextWidth(text, font)) >> 1;
+	return CONTENT_CENTER - (render.getTextWidth(text, font) >> 1);
 }
 
 function drawCentered(text, font, y, color) {
@@ -105,7 +114,7 @@ function drawStatusIcons() {
 		items.push("pause");
 	if (statusNoGps)
 		items.push("gps");
-	let x = (W - (items.length === 1 ? 16 : 36)) >> 1;
+	let x = CONTENT_CENTER - ((items.length === 1 ? 16 : 36) >> 1);
 	for (const item of items) {
 		if (item === "pause")
 			drawPause(x, y);
@@ -126,7 +135,7 @@ function drawMain() {
 	const suffixWidth = clock.suffix ? render.getTextWidth(clock.suffix, fontSuffix) : 0;
 	const gap = clock.suffix ? 4 : 0;
 	const totalWidth = digitWidth + gap + suffixWidth;
-	const x = (W - totalWidth) >> 1;
+	const x = CONTENT_CENTER - (totalWidth >> 1);
 	const y = (H - fontTime.height) >> 1;
 
 	render.drawText(clock.text, fontTime, black, x, y);
@@ -140,25 +149,14 @@ function drawMain() {
 	const statsText = stats.runs + (stats.runs === 1 ? " RUN  " : " RUNS  ") +
 		Core.formatVertical(stats.vertical, settings.units);
 	let statsFont = fontStats;
-	if (render.getTextWidth(statsText, statsFont) > W - 12)
+	if (render.getTextWidth(statsText, statsFont) > STATS_MAX)
 		statsFont = fontStatsSmall;
 	drawCentered(statsText, statsFont, y + fontTime.height + 8);
 	drawStatusIcons();
 }
 
 function detailData() {
-	const stats = store.todayStats();
 	const units = settings.units;
-	if (currentScreen === "today") {
-		return ["TODAY", [
-			["Vertical", Core.formatVertical(stats.vertical, units)],
-			["Runs", String(stats.runs)],
-			["First", stats.first ? Core.formatTime(new Date(stats.first), watch.hour12) : "--"],
-			["Last", stats.last ? Core.formatTime(new Date(stats.last), watch.hour12) : "--"],
-			["Average", Core.formatAverage(stats.average, units)],
-			["Longest", Core.formatVertical(stats.longest, units)],
-		]];
-	}
 	if (currentScreen === "season") {
 		const season = store.seasonSummary();
 		return ["SEASON", [
@@ -170,13 +168,14 @@ function detailData() {
 			["Best day", season.bestDay ? Core.formatDateShort(season.bestDay.date) : "--"],
 		]];
 	}
-	return ["ABOUT", [
-		["Slide Stats", VERSION],
-		["Platform", ROUND ? "Gabbro" : "Emery"],
-		["Units", units === "metric" ? "Metric" : "Imperial"],
-		["Data", "Watch + phone"],
-		["Stats", "Phone settings"],
-		["Tracking", store.isTracking() ? "On" : "Off"],
+	const stats = store.todayStats();
+	return ["TODAY", [
+		["Vertical", Core.formatVertical(stats.vertical, units)],
+		["Runs", String(stats.runs)],
+		["First", stats.first ? Core.formatTime(new Date(stats.first), watch.hour12) : "--"],
+		["Last", stats.last ? Core.formatTime(new Date(stats.last), watch.hour12) : "--"],
+		["Average", Core.formatAverage(stats.average, units)],
+		["Longest", Core.formatVertical(stats.longest, units)],
 	]];
 }
 
@@ -189,7 +188,7 @@ function drawDetail() {
 	for (let i = 0; i < data[1].length; i++) {
 		const y = top + i * rowHeight;
 		render.drawText(data[1][i][0], fontRow, black, MARGIN, y);
-		drawRight(data[1][i][1], fontRowBold, W - MARGIN, y);
+		drawRight(data[1][i][1], fontRowBold, DETAIL_RIGHT, y);
 	}
 }
 
@@ -204,8 +203,8 @@ function drawChevron(cx, cy, up, color) {
 function drawMenu() {
 	const headerHeight = fontMenuHeader.height + 10;
 	const top = ROUND ? 26 : 0;
-	const left = MENU_MARGIN;
-	const width = W - left * 2;
+	const left = MENU_LEFT;
+	const width = MENU_WIDTH;
 
 	render.fillRectangle(black, left, top, width, headerHeight);
 	drawCentered("MORE", fontMenuHeader, top + 5, white);
@@ -235,9 +234,145 @@ function drawMenu() {
 	}
 
 	if (menuScroll > 0)
-		drawChevron(W - MENU_MARGIN - 14, top + 10, true, white);
+		drawChevron(MENU_LEFT + MENU_WIDTH - 14, top + 10, true, white);
 	if (menuScroll + visible < MENU.length)
-		drawChevron(W >> 1, H - 9, false);
+		drawChevron(MENU_LEFT + (MENU_WIDTH >> 1), H - 9, false);
+}
+
+/* ------------------------------------------------------------------ */
+/* Action bar                                                          */
+/* ------------------------------------------------------------------ */
+
+function drawBarMountain(cx, cy) {
+	// Taller left peak, shorter right peak, no bottom border.
+	for (let y = cy - 7; y <= cy + 7; y++) {
+		const t = (y - (cy - 7)) / 14;
+		const left = Math.round(cx - 4 - 4 * t);
+		const right = Math.round(cx - 4 + 6 * t);
+		render.fillRectangle(white, left, y, right - left + 1, 1);
+	}
+	for (let y = cy - 2; y <= cy + 7; y++) {
+		const t = (y - (cy - 2)) / 9;
+		const left = Math.round(cx + 5 - 3 * t);
+		const right = Math.round(cx + 5 + 3 * t);
+		render.fillRectangle(white, left, y, right - left + 1, 1);
+	}
+	// Black separator where the right peak crosses the left.
+	for (let y = cy - 2; y <= cy + 7; y++) {
+		const t = (y - (cy - 2)) / 9;
+		render.drawPixel(black, Math.round(cx + 5 - 3 * t), y);
+	}
+}
+
+function drawBarCalendar(cx, cy) {
+	render.fillRectangle(white, cx - 7, cy - 5, 14, 12);
+	render.fillRectangle(black, cx - 7, cy - 2, 14, 1);
+	render.fillRectangle(black, cx - 4, cy - 5, 1, 3);
+	render.fillRectangle(black, cx + 3, cy - 5, 1, 3);
+	render.fillRectangle(black, cx - 1, cy + 2, 2, 2);
+}
+
+function drawBarSeason(cx, cy) {
+	// Back page.
+	render.fillRectangle(white, cx - 7, cy - 6, 12, 10);
+	render.fillRectangle(black, cx - 7, cy - 3, 12, 1);
+	// Front page with a black outline so it separates from the back page.
+	render.fillRectangle(black, cx - 3, cy - 2, 12, 10);
+	render.fillRectangle(white, cx - 2, cy - 1, 10, 8);
+	render.fillRectangle(black, cx - 2, cy + 1, 10, 1);
+	render.fillRectangle(black, cx + 2, cy + 4, 2, 2);
+}
+
+function drawBarMore(cx, cy) {
+	render.fillRectangle(white, cx - 1, cy - 5, 2, 2);
+	render.fillRectangle(white, cx - 1, cy - 1, 2, 2);
+	render.fillRectangle(white, cx - 1, cy + 3, 2, 2);
+}
+
+function drawBarLine(x0, y0, x1, y1) {
+	const dx = Math.abs(x1 - x0);
+	const sx = x0 < x1 ? 1 : -1;
+	const dy = -Math.abs(y1 - y0);
+	const sy = y0 < y1 ? 1 : -1;
+	let error = dx + dy;
+	while (true) {
+		render.fillRectangle(white, x0, y0, 2, 2);
+		if (x0 === x1 && y0 === y1)
+			break;
+		const twice = 2 * error;
+		if (twice >= dy) {
+			error += dy;
+			x0 += sx;
+		}
+		if (twice <= dx) {
+			error += dx;
+			y0 += sy;
+		}
+	}
+}
+
+function drawBarChevron(cx, cy, up) {
+	if (up) {
+		drawBarLine(cx - 5, cy + 2, cx, cy - 3);
+		drawBarLine(cx, cy - 3, cx + 5, cy + 2);
+	}
+	else {
+		drawBarLine(cx - 5, cy - 2, cx, cy + 3);
+		drawBarLine(cx, cy + 3, cx + 5, cy - 2);
+	}
+}
+
+function drawBarCheck(cx, cy) {
+	drawBarLine(cx - 5, cy, cx - 1, cy + 4);
+	drawBarLine(cx - 1, cy + 4, cx + 5, cy - 4);
+}
+
+function drawBarIcon(name, cx, cy) {
+	if (name === "mountain")
+		drawBarMountain(cx, cy);
+	else if (name === "today")
+		drawBarCalendar(cx, cy);
+	else if (name === "season")
+		drawBarSeason(cx, cy);
+	else if (name === "more")
+		drawBarMore(cx, cy);
+	else if (name === "up")
+		drawBarChevron(cx, cy, true);
+	else if (name === "down")
+		drawBarChevron(cx, cy, false);
+	else if (name === "check")
+		drawBarCheck(cx, cy);
+}
+
+function drawActionBar() {
+	if (ROUND) {
+		const diameter = H * 19 / 9;
+		const radius = diameter / 2;
+		const cx = BAR_LEFT + radius;
+		const cy = H / 2;
+		for (let y = 0; y < H; y++) {
+			const dy = y - cy;
+			const left = cx - Math.sqrt(radius * radius - dy * dy);
+			const start = Math.max(BAR_LEFT, Math.ceil(left));
+			if (start < W)
+				render.fillRectangle(black, start, y, W - start, 1);
+		}
+	}
+	else {
+		render.fillRectangle(black, BAR_LEFT, 0, BAR_W, H);
+	}
+
+	const icons = menuOpen
+		? ["up", "check", "down"]
+		: currentScreen === "main"
+			? ["season", "more", "today"]
+			: currentScreen === "today"
+				? ["mountain", "more", "season"]
+				: ["today", "more", "mountain"];
+	const cx = BAR_LEFT + (BAR_W >> 1) - (ROUND ? 2 : 0);
+	drawBarIcon(icons[0], cx, BAR_MARGIN + 9);
+	drawBarIcon(icons[1], cx, H >> 1);
+	drawBarIcon(icons[2], cx, H - BAR_MARGIN - 9);
 }
 
 function draw() {
@@ -249,6 +384,7 @@ function draw() {
 		drawMain();
 	else
 		drawDetail();
+	drawActionBar();
 	render.end();
 }
 
@@ -263,7 +399,6 @@ const MENU = [
 	{ id: "units", label: () => "Units: " + (settings.units === "metric" ? "Metric" : "Imperial") },
 	{ id: "vibration", label: () => "Vibration: " + (settings.vibration ? "On" : "Off") },
 	{ id: "sync", label: () => "Sync Now" },
-	{ id: "about", label: () => "About" },
 ];
 if (DEBUG)
 	MENU.push({ id: "mock", label: () => "Debug: Mock Lift" });
@@ -610,9 +745,6 @@ function activateMenu() {
 			flushOutbox();
 			closeMenu();
 			break;
-		case "about":
-			showScreen("about");
-			break;
 		case "mock":
 			startMockLift();
 			closeMenu();
@@ -643,10 +775,6 @@ function exitApp() {
 const SCREENS = ["main", "today", "season"];
 
 function cycleScreen(delta) {
-	if (currentScreen === "about") {
-		showScreen("main");
-		return;
-	}
 	const index = Math.max(0, SCREENS.indexOf(currentScreen));
 	showScreen(SCREENS[(index + delta + SCREENS.length) % SCREENS.length]);
 }
