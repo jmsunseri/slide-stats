@@ -38,8 +38,13 @@ def draw_icon(size):
         width=max(1, round(2 * scale * SUPERSAMPLE)),
     )
 
-    # Taller left peak, solid black.
-    draw.polygon([p(4, 28), p(13, 6), p(22, 28)], fill=BLACK)
+    # Peaks are drawn on their own layer so they can run into the badge border
+    # and be clipped by the rounded tile, with no white line underneath.
+    peaks = Image.new("RGBA", (canvas, canvas), CLEAR)
+    pdraw = ImageDraw.Draw(peaks)
+
+    # Taller left peak, solid black, rooted in the border.
+    pdraw.polygon([p(4, 31), p(13, 6), p(22, 31)], fill=BLACK)
 
     # White snow cap inside the left peak, with a jagged lower edge.
     cap = [
@@ -51,17 +56,28 @@ def draw_icon(size):
         p(12.4, 17.8),
         p(11.2, 15.4),
     ]
-    draw.polygon(cap, fill=WHITE)
+    pdraw.polygon(cap, fill=WHITE)
 
-    # Shorter right peak, solid black.
-    draw.polygon([p(17, 28), p(24, 12), p(30, 28)], fill=BLACK)
+    # Shorter right peak, solid black, also rooted in the border.
+    pdraw.polygon([p(17, 31), p(24, 12), p(30, 31)], fill=BLACK)
 
     # White separator where the right peak crosses the left one.
-    draw.line(
-        [p(24, 12), p(17, 28)],
+    pdraw.line(
+        [p(24, 12), p(17, 28.5)],
         fill=WHITE,
         width=max(1, round(1.6 * scale * SUPERSAMPLE)),
     )
+
+    # Keep the peaks inside the rounded badge.
+    mask = Image.new("L", (canvas, canvas), 0)
+    ImageDraw.Draw(mask).rounded_rectangle(
+        box(1, 1, 31, 31),
+        radius=6 * scale * SUPERSAMPLE,
+        fill=255,
+    )
+    clipped = Image.new("RGBA", (canvas, canvas), CLEAR)
+    clipped.paste(peaks, (0, 0), mask)
+    image.alpha_composite(clipped)
 
     return image.resize((size, size), Image.LANCZOS)
 
