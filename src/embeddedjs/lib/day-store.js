@@ -6,7 +6,7 @@
  * The storage adapter is injected so tests can run headlessly.
  */
 
-import { dayKey, summarize } from "./season.js";
+import { dayKey, summarize } from "season";
 
 const STATE_KEY = "ss.state";
 const STATE_VERSION = 1;

@@ -1,9 +1,13 @@
 {
- 	"include":  [
+	"include": [
 		"$(MODDABLE)/examples/manifest_mod.json",
 		"$(MODDABLE)/examples/manifest_typings.json"
 	],
 	"modules": {
-		"*": "./main"
+		"*": "./main",
+		"detector": "./lib/detector.js",
+		"day-store": "./lib/day-store.js",
+		"season": "./lib/season.js",
+		"format": "./lib/format.js"
 	}
 }

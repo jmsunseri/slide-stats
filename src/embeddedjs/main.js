@@ -1,16 +1,17 @@
-import {} from "piu/MC";
+import Poco from "commodetto/Poco";
 import Button from "pebble/button";
 import Vibes from "pebble/vibes";
 import Location from "embedded:sensor/Location";
 import Message from "pebble/message";
 
-import { createLiftDetector } from "./lib/detector.js";
-import { createDayStore } from "./lib/day-store.js";
-import * as Format from "./lib/format.js";
+import { createLiftDetector } from "detector";
+import { createDayStore } from "day-store";
+import * as Format from "format";
 
 const VERSION = "0.1.0";
 const DEBUG = true;
 const PROCESS_MS = 10000;
+const GPS_DRAW_MS = 5000;
 
 const storage = {
 	getItem: key => localStorage.getItem(key),
@@ -30,6 +31,7 @@ let statusNoGps = false;
 let lastAltitude = null;
 let recentAltitudes = [];
 let lastProcessed = 0;
+let lastDraw = 0;
 let mockTimer = null;
 
 let menuOpen = false;
@@ -37,104 +39,36 @@ let menuIndex = 0;
 let currentScreen = "main";
 
 /* ------------------------------------------------------------------ */
-/* UI                                                                  */
+/* Drawing                                                             */
 /* ------------------------------------------------------------------ */
 
-const whiteSkin = new Skin({ fill: "white" });
+const render = new Poco(screen);
+const white = render.makeColor(255, 255, 255);
+const black = render.makeColor(0, 0, 0);
 
-const timeStyle = new Style({ font: "bold 42px Bitham", color: "black", horizontal: "center" });
-const altitudeStyle = new Style({ font: "bold 28px Gothic", color: "black", horizontal: "center" });
-const statsStyle = new Style({ font: "18px Gothic", color: "black", horizontal: "center" });
-const statusStyle = new Style({ font: "14px Gothic", color: "black", horizontal: "center" });
-const titleStyle = new Style({ font: "bold 18px Gothic", color: "black", horizontal: "center" });
-const rowStyle = new Style({ font: "18px Gothic", color: "black" });
-const rowValueStyle = new Style({ font: "bold 18px Gothic", color: "black", horizontal: "right" });
-const menuStyle = new Style({ font: "14px Gothic", color: "black", horizontal: "center" });
+const fontTime = new render.Font("Bitham-Bold", 42);
+const fontAltitude = new render.Font("Gothic-Bold", 28);
+const fontStats = new render.Font("Gothic-Regular", 18);
+const fontStatus = new render.Font("Gothic-Regular", 14);
+const fontTitle = new render.Font("Gothic-Bold", 18);
+const fontRow = new render.Font("Gothic-Regular", 18);
+const fontRowBold = new render.Font("Gothic-Bold", 18);
+const fontMenu = new render.Font("Gothic-Regular", 14);
 
-const round = screen.round;
-const side = round ? 40 : 0;
-const mainTop = round ? 34 : 16;
-const detailTop = round ? 34 : 14;
-const menuTop = round ? 32 : 14;
+const W = render.width;
+const H = render.height;
+const ROUND = screen.round;
+const MARGIN = ROUND ? 40 : 6;
 
-const timeLabel = new Label(null, {
-	left: 0, right: 0, top: 0, height: 52,
-	style: timeStyle, string: "--:--",
-});
-const altitudeLabel = new Label(null, {
-	left: 0, right: 0, top: 58, height: 34,
-	style: altitudeStyle, string: "--",
-});
-const statsLabel = new Label(null, {
-	left: 0, right: 0, top: 96, height: 26,
-	style: statsStyle, string: "",
-});
-const statusLabel = new Label(null, {
-	left: 0, right: 0, top: 128, height: 18,
-	style: statusStyle, string: "",
-});
-
-const mainScreen = new Container(null, {
-	left: side, right: side, top: mainTop, bottom: 0,
-	contents: [timeLabel, altitudeLabel, statsLabel, statusLabel],
-	visible: true,
-});
-
-const titleLabel = new Label(null, {
-	left: 0, right: 0, top: 0, height: 24,
-	style: titleStyle, string: "",
-});
-
-const detailRows = [];
-for (let i = 0; i < 6; i++) {
-	const left = new Label(null, { left: 0, width: 85, top: 0, height: 24, style: rowStyle, string: "" });
-	const right = new Label(null, { right: 0, width: 95, top: 0, height: 24, style: rowValueStyle, string: "" });
-	const row = new Container(null, {
-		left: 0, right: 0, top: 30 + i * 24, height: 24,
-		contents: [left, right],
-	});
-	detailRows.push({ row, left, right });
+function drawCentered(text, font, y) {
+	const width = render.getTextWidth(text, font);
+	render.drawText(text, font, black, (W - width) >> 1, y);
 }
-const detailScreen = new Container(null, {
-	left: side, right: side, top: detailTop, bottom: 0,
-	contents: [titleLabel].concat(detailRows.map(item => item.row)),
-	visible: false,
-});
 
-const MENU = [
-	{ id: "base", label: () => "Set Base" },
-	{ id: "day", label: () => (isDayClosed() ? "Resume Day" : "End Day") },
-	{ id: "pause", label: () => (settings.paused ? "Resume" : "Pause") },
-	{ id: "undo", label: () => "Undo Last Lift" },
-	{ id: "units", label: () => "Units: " + (settings.units === "metric" ? "Metric" : "Imperial") },
-	{ id: "vibration", label: () => "Vibration: " + (settings.vibration ? "On" : "Off") },
-	{ id: "sync", label: () => "Sync Now" },
-	{ id: "about", label: () => "About" },
-];
-if (DEBUG)
-	MENU.push({ id: "mock", label: () => "Debug: Mock Lift" });
-
-const menuLabels = [];
-for (let i = 0; i < MENU.length; i++) {
-	menuLabels.push(new Label(null, {
-		left: 10, right: 10, top: i * 18, height: 18,
-		style: menuStyle, string: "",
-	}));
+function drawRight(text, font, right, y) {
+	const width = render.getTextWidth(text, font);
+	render.drawText(text, font, black, right - width, y);
 }
-const menuScreen = new Container(null, {
-	left: side, right: side, top: menuTop, bottom: 0,
-	contents: menuLabels,
-	visible: false,
-});
-
-const application = new Application(null, {
-	skin: whiteSkin,
-	contents: [mainScreen, detailScreen, menuScreen],
-});
-
-/* ------------------------------------------------------------------ */
-/* Display                                                             */
-/* ------------------------------------------------------------------ */
 
 function isDayClosed() {
 	const today = store.getToday();
@@ -153,123 +87,138 @@ function statusText() {
 	return "";
 }
 
-function updateMain() {
-	const now = new Date();
-	timeLabel.string = Format.formatTime(now, watch.hour12);
-	statusLabel.string = statusText();
-
+function drawMain() {
 	const stats = store.todayStats();
+	drawCentered(Format.formatTime(new Date(), watch.hour12), fontTime, ROUND ? 30 : 14);
+
+	let altitude;
+	let statsText;
 	if (store.hasBase()) {
-		altitudeLabel.string = Format.formatAltitude(lastAltitude, settings.units);
+		altitude = Format.formatAltitude(lastAltitude, settings.units);
 		const runs = stats.runs + (stats.runs === 1 ? " RUN  " : " RUNS  ");
-		statsLabel.string = runs + Format.formatVertical(stats.vertical, settings.units);
+		statsText = runs + Format.formatVertical(stats.vertical, settings.units);
 	}
 	else {
-		altitudeLabel.string = "SET BASE";
-		statsLabel.string = lastAltitude === null
+		altitude = "SET BASE";
+		statsText = lastAltitude === null
 			? "WAITING FOR GPS"
 			: Format.formatAltitude(lastAltitude, settings.units) + "  SELECT";
 	}
+	drawCentered(altitude, fontAltitude, ROUND ? 88 : 70);
+	drawCentered(statsText, fontStats, ROUND ? 126 : 108);
+	drawCentered(statusText(), fontStatus, ROUND ? 156 : 138);
 }
 
-function setRows(rows) {
-	for (let i = 0; i < detailRows.length; i++) {
-		const row = detailRows[i];
-		if (i < rows.length) {
-			row.left.string = rows[i][0];
-			row.right.string = rows[i][1];
-			row.row.visible = true;
-		}
-		else {
-			row.left.string = "";
-			row.right.string = "";
-			row.row.visible = false;
-		}
-	}
-}
-
-function updateDetail() {
+function detailRows() {
 	const stats = store.todayStats();
 	const units = settings.units;
 	if (currentScreen === "today") {
-		titleLabel.string = "TODAY";
-		setRows([
+		return ["TODAY", [
 			["Vertical", Format.formatVertical(stats.vertical, units)],
 			["Runs", String(stats.runs)],
 			["First", stats.first ? Format.formatTime(new Date(stats.first), watch.hour12) : "--"],
 			["Last", stats.last ? Format.formatTime(new Date(stats.last), watch.hour12) : "--"],
 			["Average", Format.formatAverage(stats.average, units)],
 			["Longest", Format.formatVertical(stats.longest, units)],
-		]);
+		]];
 	}
-	else if (currentScreen === "season") {
+	if (currentScreen === "season") {
 		const season = store.seasonSummary();
-		titleLabel.string = "SEASON";
-		setRows([
+		return ["SEASON", [
 			["Season", season.label],
 			["Days", String(season.days)],
 			["Vertical", Format.formatVertical(season.vertical, units)],
 			["Runs", String(season.runs)],
 			["Avg / day", Format.formatAverage(season.averageVertical, units)],
 			["Best day", season.bestDay ? Format.formatDateShort(season.bestDay.date) : "--"],
-		]);
+		]];
 	}
-	else if (currentScreen === "about") {
-		titleLabel.string = "ABOUT";
-		setRows([
-			["Slide Stats", VERSION],
-			["Platform", round ? "Gabbro" : "Emery"],
-			["Units", units === "metric" ? "Metric" : "Imperial"],
-			["Data", "Watch + phone"],
-			["Stats", "Pebble app > Settings"],
-			["Tracking", store.isTracking() ? "On" : "Off"],
-		]);
+	return ["ABOUT", [
+		["Slide Stats", VERSION],
+		["Platform", ROUND ? "Gabbro" : "Emery"],
+		["Units", units === "metric" ? "Metric" : "Imperial"],
+		["Data", "Watch + phone"],
+		["Stats", "Pebble app > Settings"],
+		["Tracking", store.isTracking() ? "On" : "Off"],
+	]];
+}
+
+function drawDetail() {
+	const detail = detailRows();
+	drawCentered(detail[0], fontTitle, ROUND ? 36 : 12);
+	const rows = detail[1];
+	const top = ROUND ? 66 : 40;
+	for (let i = 0; i < rows.length; i++) {
+		const y = top + i * 24;
+		render.drawText(rows[i][0], fontRow, black, MARGIN, y);
+		drawRight(rows[i][1], fontRowBold, W - MARGIN, y);
 	}
 }
 
-function updateMenu() {
+function drawMenu() {
+	const top = ROUND ? 32 : 12;
 	for (let i = 0; i < MENU.length; i++)
-		menuLabels[i].string = (i === menuIndex ? "> " : "  ") + MENU[i].label();
+		drawCentered((i === menuIndex ? "> " : "  ") + MENU[i].label(), fontMenu, top + i * 18);
 }
+
+function draw() {
+	lastDraw = Date.now();
+	render.begin();
+	render.fillRectangle(white, 0, 0, W, H);
+	if (menuOpen)
+		drawMenu();
+	else if (currentScreen === "main")
+		drawMain();
+	else
+		drawDetail();
+	render.end();
+}
+
+/* ------------------------------------------------------------------ */
+/* Menu                                                                */
+/* ------------------------------------------------------------------ */
+
+const MENU = [
+	{ id: "base", label: () => "Set Base" },
+	{ id: "day", label: () => (isDayClosed() ? "Resume Day" : "End Day") },
+	{ id: "pause", label: () => (settings.paused ? "Resume" : "Pause") },
+	{ id: "undo", label: () => "Undo Last Lift" },
+	{ id: "units", label: () => "Units: " + (settings.units === "metric" ? "Metric" : "Imperial") },
+	{ id: "vibration", label: () => "Vibration: " + (settings.vibration ? "On" : "Off") },
+	{ id: "sync", label: () => "Sync Now" },
+	{ id: "about", label: () => "About" },
+];
+if (DEBUG)
+	MENU.push({ id: "mock", label: () => "Debug: Mock Lift" });
+
+/* ------------------------------------------------------------------ */
+/* Navigation                                                          */
+/* ------------------------------------------------------------------ */
 
 function updateAll() {
 	settings = store.getSettings();
-	updateMain();
-	if (!menuOpen && currentScreen !== "main")
-		updateDetail();
-	if (menuOpen)
-		updateMenu();
+	draw();
 }
 
 function showScreen(name) {
 	currentScreen = name;
 	menuOpen = false;
-	menuScreen.visible = false;
-	if (name === "main") {
-		mainScreen.visible = true;
-		detailScreen.visible = false;
-		updateMain();
-	}
-	else {
-		mainScreen.visible = false;
-		detailScreen.visible = true;
-		updateDetail();
-	}
+	draw();
 }
 
 function openMenu() {
 	menuOpen = true;
 	menuIndex = 0;
-	mainScreen.visible = false;
-	detailScreen.visible = false;
-	menuScreen.visible = true;
-	updateMenu();
+	draw();
 }
 
 function closeMenu() {
 	menuOpen = false;
-	menuScreen.visible = false;
-	showScreen(currentScreen);
+	draw();
+}
+
+function updateMenu() {
+	draw();
 }
 
 /* ------------------------------------------------------------------ */
@@ -296,7 +245,7 @@ function startGps() {
 			},
 			onError() {
 				statusNoGps = true;
-				updateMain();
+				draw();
 			},
 		});
 		location.configure({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
@@ -321,6 +270,7 @@ function stopGps() {
 
 function handleSample(sample) {
 	const altitude = sample.altitude;
+	const wasNoGps = statusNoGps;
 	if (typeof altitude === "number" && isFinite(altitude)) {
 		lastAltitude = smoothedAltitude(altitude);
 		statusNoGps = false;
@@ -330,7 +280,8 @@ function handleSample(sample) {
 	}
 
 	if (!store.hasBase() || settings.paused || isDayClosed()) {
-		updateMain();
+		if (statusNoGps !== wasNoGps || Date.now() - lastDraw > GPS_DRAW_MS)
+			draw();
 		return;
 	}
 
@@ -354,7 +305,7 @@ function handleEvents(events) {
 			onLift = true;
 			console.log("slide-stats: lift start");
 			vibrate();
-			updateMain();
+			draw();
 		}
 		else if (event.type === "end") {
 			onLift = false;
@@ -367,7 +318,7 @@ function handleEvents(events) {
 		}
 		else if (event.type === "discard") {
 			onLift = false;
-			updateMain();
+			draw();
 		}
 	}
 }
@@ -491,13 +442,13 @@ function applySettings(json) {
 function setBase() {
 	if (lastAltitude === null || !isFinite(lastAltitude)) {
 		statusNoGps = true;
-		updateMain();
+		draw();
 		return;
 	}
 	store.setBase(lastAltitude);
 	store.setPaused(false);
-	sendSettings();
 	settings = store.getSettings();
+	sendSettings();
 	detector.reset();
 	onLift = false;
 	lastProcessed = 0;
@@ -707,7 +658,7 @@ new Button({
 	},
 });
 
-watch.addEventListener("minutechange", updateMain);
+watch.addEventListener("minutechange", draw);
 
 watch.addEventListener("daychange", () => {
 	const result = store.ensureToday(true);
@@ -730,7 +681,6 @@ watch.addEventListener("didFocus", inFocus => {
 
 setupMessage();
 updateAll();
-showScreen("main");
 
 if (!settings.paused && !isDayClosed())
 	startGps();
