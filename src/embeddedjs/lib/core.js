@@ -476,6 +476,7 @@ const DEFAULT_SETTINGS = {
 	units: "metric",
 	vibration: true,
 	paused: false,
+	sampleIntervalMs: 10000,
 	seasonMode: "north",
 	seasonStartMonth: 9,
 	seasonStartDay: 1,

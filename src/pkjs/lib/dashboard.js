@@ -223,6 +223,8 @@ function settingsSection(settings, summary) {
 		'<div class="field"><label for="seasonStartDay">Day</label>' +
 		'<select id="seasonStartDay">' + dayOptions(s.seasonStartDay || 1) + "</select></div></div>" +
 		'<h2>Lift detection</h2>' +
+		'<div class="field"><label for="sampleIntervalMs">GPS sample interval (seconds)</label>' +
+		'<input type="number" id="sampleIntervalMs" min="5" max="60" step="1" value="' + Math.round((s.sampleIntervalMs || 10000) / 1000) + '"></div>' +
 		'<div class="field-row"><div class="field"><label for="minLiftGainM">Minimum lift gain (m)</label>' +
 		'<input type="number" id="minLiftGainM" min="5" max="50" step="1" value="' + (d.minLiftGainM || 10) + '"></div>' +
 		'<div class="field"><label for="endDescentM">Descent that ends a lift (m)</label>' +
@@ -331,6 +333,7 @@ ${settingsSection(settings, summary)}
     s.seasonMode = document.getElementById("seasonMode").value;
     s.seasonStartMonth = Number(document.getElementById("seasonStartMonth").value);
     s.seasonStartDay = Number(document.getElementById("seasonStartDay").value);
+    s.sampleIntervalMs = Number(document.getElementById("sampleIntervalMs").value) * 1000;
     s.detection = s.detection || {};
     s.detection.minLiftGainM = Number(document.getElementById("minLiftGainM").value);
     s.detection.endDescentM = Number(document.getElementById("endDescentM").value);

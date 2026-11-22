@@ -8,7 +8,6 @@ import * as Core from "core";
 
 const VERSION = "0.1.0";
 const DEBUG = true;
-const PROCESS_MS = 10000;
 
 const storage = {
 	getItem: key => localStorage.getItem(key),
@@ -287,7 +286,8 @@ function handleSample(sample) {
 	}
 
 	const now = Date.now();
-	if (now - lastProcessed < PROCESS_MS)
+	const interval = settings.sampleIntervalMs || 10000;
+	if (now - lastProcessed < interval)
 		return;
 	lastProcessed = now;
 

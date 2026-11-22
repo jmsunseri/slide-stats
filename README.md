@@ -32,8 +32,8 @@ A working first version:
 - Base-altitude zeroing, pause, end day, undo last lift
 - One-blob persistence with a sync outbox that drains on launch
 - Lift sync to PebbleKit JS, deduped on the phone
-- Local dashboard: Today, Trips, Season, Settings, with units, season modes, and
-  detection settings
+- Local dashboard: Today, Trips, Season, Settings, with units, season modes, GPS sample
+  interval, and detection settings
 - Metric by default, imperial toggle
 
 Not done yet: real-world threshold tuning, accelerometer-gated GPS, drawn status icons,
