@@ -778,9 +778,7 @@ function formatVertical(metres, units) {
 	if (metres === null || metres === undefined || !isFinite(metres))
 		return "--";
 	const value = units === "imperial" ? toFeet(metres) : metres;
-	const rounded = Math.round(value);
-	const sign = rounded > 0 ? "+" : "";
-	return sign + groupThousands(rounded) + " " + unitLabel(units, true);
+	return groupThousands(value) + " " + unitLabel(units, true);
 }
 
 function formatClock(date, hour12) {

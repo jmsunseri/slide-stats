@@ -27,7 +27,7 @@ A working first version:
 - Automatic lift detection (fast and slow tiers, median-filtered altitude, descent-based
   ending)
 - Auto-start on launch, pause, end day, undo last lift
-- Time at the true centre of the display, with runs and vertical directly below
+- Time at the true vertical centre — centred in the content area on Emery and in the circle on Gabbro — with runs and vertical directly below
 - Native action bar on the right: straight on Emery, curved on Gabbro, with
   destination icons for Up/Select/Down
 - Icon-only status: pause and no-GPS, and only when they need attention

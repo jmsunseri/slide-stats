@@ -39,12 +39,11 @@ function fmtDist(metres, units) {
 	return group(value) + (units === "imperial" ? " ft" : " m");
 }
 
-function fmtSigned(metres, units) {
+function fmtVertical(metres, units) {
 	if (metres === null || metres === undefined || !isFinite(metres))
 		return "--";
 	const value = units === "imperial" ? metres * 3.28084 : metres;
-	const rounded = Math.round(value);
-	return (rounded > 0 ? "+" : "") + group(rounded) + (units === "imperial" ? " ft" : " m");
+	return group(value) + (units === "imperial" ? " ft" : " m");
 }
 
 function fmtTime(timestamp) {
@@ -81,7 +80,7 @@ function liftRows(lifts, units) {
 		rows += "<tr><td>" + (index + 1) + "</td>" +
 			"<td>" + fmtTime(lift.startTime) + "</td>" +
 			"<td>" + fmtTime(lift.endTime) + "</td>" +
-			"<td class=\"num\">" + fmtSigned(lift.gain, units) + "</td></tr>";
+			"<td class=\"num\">" + fmtVertical(lift.gain, units) + "</td></tr>";
 	});
 	return '<table><thead><tr><th>#</th><th>Board</th><th>Top</th><th class="num">Gain</th></tr></thead><tbody>' +
 		rows + "</tbody></table>";
@@ -97,13 +96,13 @@ function todaySection(summary, units) {
 	}
 	return '<section class="panel active" data-panel="today">' +
 		'<div class="hero"><div class="hero-label">TODAY · ' + fmtDate(today.date) + '</div>' +
-		'<div class="hero-value">' + fmtSigned(today.v, units) + '</div>' +
+		'<div class="hero-value">' + fmtVertical(today.v, units) + '</div>' +
 		'<div class="hero-sub">' + today.r + (today.r === 1 ? " run" : " runs") + '</div></div>' +
 		'<div class="grid">' +
 		'<div class="stat"><span>First lift</span><b>' + fmtTime(today.first) + '</b></div>' +
 		'<div class="stat"><span>Last lift</span><b>' + fmtTime(today.last) + '</b></div>' +
 		'<div class="stat"><span>Average</span><b>' + fmtDist(today.average, units) + '</b></div>' +
-		'<div class="stat"><span>Longest</span><b>' + fmtSigned(today.longest, units) + '</b></div>' +
+		'<div class="stat"><span>Longest</span><b>' + fmtVertical(today.longest, units) + '</b></div>' +
 		"</div><h2>Lifts</h2>" + liftRows(today.lifts, units) + "</section>";
 }
 
@@ -116,7 +115,7 @@ function tripsSection(summary, units) {
 		html += '<div class="card"><div class="card-head"><h2>' + esc(trip.label) + "</h2>" +
 			'<span class="pill">' + trip.daysCount + (trip.daysCount === 1 ? " day" : " days") + "</span></div>" +
 			'<div class="grid">' +
-			'<div class="stat"><span>Vertical</span><b>' + fmtSigned(trip.vertical, units) + '</b></div>' +
+			'<div class="stat"><span>Vertical</span><b>' + fmtVertical(trip.vertical, units) + '</b></div>' +
 			'<div class="stat"><span>Runs</span><b>' + trip.runs + '</b></div>' +
 			'<div class="stat"><span>Average / day</span><b>' + fmtDist(trip.averageVertical, units) + '</b></div>' +
 			'<div class="stat"><span>Best day</span><b>' + (trip.bestDay ? fmtDate(trip.bestDay.date) : "--") + '</b></div>' +
@@ -131,7 +130,7 @@ function daysTable(days, units) {
 	let rows = "";
 	for (const day of days) {
 		rows += "<tr><td>" + fmtDay(day.date) + "</td>" +
-			'<td class="num">' + fmtSigned(day.v, units) + "</td>" +
+			'<td class="num">' + fmtVertical(day.v, units) + "</td>" +
 			'<td class="num">' + day.r + "</td></tr>";
 	}
 	return '<h2>Days</h2><table><thead><tr><th>Day</th><th class="num">Vertical</th><th class="num">Runs</th></tr></thead><tbody>' +
@@ -154,7 +153,7 @@ function chart(series, units) {
 	return '<div class="chart"><svg viewBox="0 0 ' + width + " " + height + '" preserveAspectRatio="none">' +
 		bars + "</svg></div>" +
 		'<div class="chart-labels"><span>' + fmtDate(series[0].date) + "</span><span>" +
-		fmtSigned(max, units) + "</span><span>" + fmtDate(series[series.length - 1].date) + "</span></div>";
+		fmtVertical(max, units) + "</span><span>" + fmtDate(series[series.length - 1].date) + "</span></div>";
 }
 
 function seasonSection(summary, units) {
@@ -163,7 +162,7 @@ function seasonSection(summary, units) {
 	const heroLabel = season.label === "All time" ? "ALL TIME" : esc(season.label) + " SEASON";
 	return '<section class="panel" data-panel="season">' +
 		'<div class="hero"><div class="hero-label">' + heroLabel + '</div>' +
-		'<div class="hero-value">' + fmtSigned(season.vertical, units) + '</div>' +
+		'<div class="hero-value">' + fmtVertical(season.vertical, units) + '</div>' +
 		'<div class="hero-sub">' + season.daysCount + (season.daysCount === 1 ? " ski day" : " ski days") + '</div></div>' +
 		'<div class="grid">' +
 		'<div class="stat"><span>Runs</span><b>' + season.runs + '</b></div>' +
@@ -172,7 +171,7 @@ function seasonSection(summary, units) {
 		'<div class="stat"><span>Trips</span><b>' + season.trips.length + '</b></div>' +
 		"</div>" + chart(season.series, units) + daysTable(summary.days, units) +
 		'<h2>All time</h2><div class="grid">' +
-		'<div class="stat"><span>Vertical</span><b>' + fmtSigned(all.vertical, units) + '</b></div>' +
+		'<div class="stat"><span>Vertical</span><b>' + fmtVertical(all.vertical, units) + '</b></div>' +
 		'<div class="stat"><span>Ski days</span><b>' + all.daysCount + '</b></div>' +
 		'<div class="stat"><span>Runs</span><b>' + all.runs + '</b></div>' +
 		'<div class="stat"><span>Best day</span><b>' + (all.bestDay ? fmtDate(all.bestDay.date) : "--") + '</b></div>' +

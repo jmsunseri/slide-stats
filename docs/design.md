@@ -58,7 +58,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 │                        │     │
 │        10:42           │  ⋮  │  time, true vertical centre
 │                        │     │
-│    3 RUNS  +1,240 m    │  ↓  │  stats, 24 px
+│    3 RUNS  1,240 m    │  ↓  │  stats, 24 px
 │                        │     │
 │  reserved bottom zone  │     │  future graphic; status icons at bottom
 └────────────────────────┴─────┘

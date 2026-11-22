@@ -29,10 +29,10 @@ test("metric and imperial altitude", () => {
 	assert.equal(formatAltitude(0, "metric"), "0 m");
 });
 
-test("vertical always shows its sign", () => {
-	assert.equal(formatVertical(1240, "metric"), "+1,240 m");
+test("vertical shows magnitude without a leading plus", () => {
+	assert.equal(formatVertical(1240, "metric"), "1,240 m");
 	assert.equal(formatVertical(0, "metric"), "0 m");
-	assert.equal(formatVertical(500, "imperial"), "+1,640 ft");
+	assert.equal(formatVertical(500, "imperial"), "1,640 ft");
 });
 
 test("feet conversion round-trips", () => {
