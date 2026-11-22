@@ -11,10 +11,6 @@ season statistics.
 Built with [Alloy](https://developer.repebble.com/guides/alloy/), the Pebble JavaScript
 framework, and drawn with Poco for a small memory footprint and infrequent redraws.
 
-| Emery | Gabbro | Phone dashboard |
-| --- | --- | --- |
-| ![Emery main screen](docs/images/emery-main.png) | ![Gabbro main screen](docs/images/gabbro-main.png) | ![Dashboard](docs/images/dashboard.jpg) |
-
 ## Platform support
 
 Alloy runs only on **Emery (Pebble Time 2)** and **Gabbro (Pebble Round 2)**. Those are
@@ -43,6 +39,32 @@ A working first version:
 
 Not done yet: real-world threshold tuning, accelerometer-gated GPS, and backcountry mode
 (issue #1).
+
+## Screens
+
+### Emery (Pebble Time 2)
+
+| Main | Today | Season |
+| --- | --- | --- |
+| ![Main](docs/images/emery/main.png) | ![Today](docs/images/emery/today.png) | ![Season](docs/images/emery/season.png) |
+
+| More | About |
+| --- | --- |
+| ![More menu](docs/images/emery/menu.png) | ![About](docs/images/emery/about.png) |
+
+### Gabbro (Pebble Round 2)
+
+| Main | Today | Season |
+| --- | --- | --- |
+| ![Main](docs/images/gabbro/main.png) | ![Today](docs/images/gabbro/today.png) | ![Season](docs/images/gabbro/season.png) |
+
+| More | About |
+| --- | --- |
+| ![More menu](docs/images/gabbro/menu.png) | ![About](docs/images/gabbro/about.png) |
+
+### Phone dashboard
+
+![Slide Stats dashboard](docs/images/dashboard.jpg)
 
 ## Build
 
