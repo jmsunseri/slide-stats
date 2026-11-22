@@ -35,7 +35,7 @@ A working first version:
 - Icon-only status: pause and no-GPS, and only when they need attention
 - Native-style scrolling More menu with no header, bold text, and a black left bar for the
   selected row; fonts follow the watch's Text Size setting up to an 18 px cap
-- Two-peak mountain app icon with a snow cap
+- Two-peak mountain app icon with a snow cap, repeated as a mark above the clock
 - North/South seasons, re-bucketed automatically if the setting changes
 - One-blob persistence with a sync outbox that drains on launch
 - Lift sync to PebbleKit JS with unique record ids, so reinstalls, seq resets, and a

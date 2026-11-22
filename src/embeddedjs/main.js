@@ -113,6 +113,39 @@ function drawNoGps(x, y) {
 	}
 }
 
+function drawTriangle(cx, baseY, half, height, color) {
+	for (let i = 0; i < height; i++) {
+		const w = Math.round(half * i / (height - 1));
+		render.fillRectangle(color, cx - w, baseY - height + 1 + i, w * 2 + 1, 1);
+	}
+}
+
+/** The two-peak mark from the app icon: taller left peak with a snow cap. */
+function drawPeaks(cx, baseY, height) {
+	const scale = height / 22;
+	const leftHalf = Math.round(9 * scale);
+	const rightHalf = Math.round(6.5 * scale);
+	const rightHeight = Math.round(16 * scale);
+	const leftCx = cx - Math.round(4 * scale);
+	const rightCx = leftCx + Math.round(10.5 * scale);
+	const topY = baseY - height + 1;
+
+	drawTriangle(leftCx, baseY, leftHalf, height, black);
+
+	const capTop = topY + Math.round(4 * scale);
+	const capHeight = Math.round(8 * scale);
+	const capHalf = Math.max(2, Math.round(3 * scale));
+	const capBase = capTop + capHeight - 1;
+	drawTriangle(leftCx, capBase, capHalf, capHeight, white);
+	const tooth = Math.max(1, Math.round(scale));
+	const gap = Math.max(1, Math.round(capHalf * 0.4));
+	render.fillRectangle(black, leftCx - gap, capBase - tooth - 1, tooth, tooth + 2);
+	render.fillRectangle(black, leftCx + gap, capBase - tooth, tooth, tooth + 1);
+
+	drawTriangle(rightCx, baseY, rightHalf, rightHeight, black);
+	render.drawLine(rightCx, baseY - rightHeight + 1, rightCx - rightHalf, baseY, white, 1);
+}
+
 function drawStatusIcons() {
 	if (!settings.paused && !statusNoGps)
 		return;
@@ -186,6 +219,8 @@ function dayTitle(key) {
 }
 
 function drawMain() {
+	drawPeaks(CONTENT_CENTER, ROUND ? 78 : 70, ROUND ? 48 : 44);
+
 	const clock = Core.formatClock(new Date(), watch.hour12);
 	const digitWidth = render.getTextWidth(clock.text, fontTime);
 	const suffixWidth = clock.suffix ? render.getTextWidth(clock.suffix, fontSuffix) : 0;
