@@ -68,7 +68,6 @@ test("fast chair is detected within one sample and ends on descent", () => {
 	assert.equal(end.lift.startTime, 0);
 	assert.equal(end.lift.endTime, 300000);
 	assert.equal(end.lift.durationMs, 300000);
-	assert.equal(detector.state().phase, "idle");
 });
 
 test("slow bunny lift is caught by the 90 s tier", () => {
@@ -240,24 +239,13 @@ test("a single altitude spike does not trigger through the median filter", () =>
 	assert.equal(starts(events).length, 0);
 });
 
-test("state reports an active lift and its gain", () => {
-	const detector = createLiftDetector();
-	feed(detector, climb(0, 2000, 2, 60, { speed: 4 }));
-	const state = detector.state();
-	assert.equal(state.phase, "lift");
-	assert.ok(state.lift);
-	assert.equal(state.lift.startAltitude, 2000);
-	assert.ok(state.lift.gain >= 100);
-});
-
-test("reset returns the detector to idle", () => {
+test("reset clears an in-progress lift", () => {
 	const detector = createLiftDetector();
 	feed(detector, climb(0, 2000, 2, 60, { speed: 4 }));
 	detector.reset();
-	assert.equal(detector.state().phase, "idle");
-	assert.equal(detector.state().lift, null);
+	const events = feed(detector, climb(120000, 2000, 2, 60, { speed: 4 }));
+	assert.equal(starts(events).length, 1);
 });
-
 test("out-of-order and duplicate samples are ignored", () => {
 	const detector = createLiftDetector();
 	const samples = climb(0, 2000, 2, 30, { speed: 4 });

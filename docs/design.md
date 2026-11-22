@@ -40,7 +40,13 @@ still needs a decision.
 - **Trips:** ride days separated by ≤ 2 intervening rest days group into one trip. On by
   default, can be hidden. Trips are shown on the phone only.
 - **Sync:** watch owns today, phone owns history. Lift records sync after each completed
-  lift; unacked records flush on launch. Phone dedupes by `dayKey + sequence`.
+  lift; unacked records flush on launch. Every record carries a unique `uid`; the phone
+  dedupes by `uid` (with `seq` as the legacy fallback), so a reinstall, a seq reset, or a
+  second watch cannot double-count. There are no per-watch totals.
+- **History screens:** Today and Season are backed by the phone. The watch asks for one
+  summary at a time with `Query` and the phone answers with `Data`. The watch keeps today's
+  totals live from local data and uses the phone only for past days and neighbour keys.
+  Only the selected summary's immediate neighbours are prefetched.
 - **Dashboard:** local config page with Today / Trips / Season / Settings. No export in
   v1. Stats: vertical, runs, first/last lift, average per run, longest run, days, best
   day, trip counts, averages per day, daily bar chart.
@@ -101,12 +107,16 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 ## Screens and input
 
 - **Main** — clock, runs and day vertical, pause/no-GPS icons.
-- **Today** — vertical, runs, first/last lift, average per run, longest run.
-- **Season** — label, days, vertical, runs, average/day, best day. Computed on the watch
-  from its stored daily aggregates; no phone round-trip needed.
-- **More** (Select from any screen) — End/Resume Day, Pause/Resume, Undo Last Lift, Units,
-  Vibration, Sync Now. Native-style scrolling menu with a black `MORE` header, inverted
-  selection, chevrons, and fonts that follow the watch Text Size setting.
+- **Today** — vertical, runs, first/last lift, average per run, longest run. Today's values
+  come from the live watch store; past days are summaries fetched from the phone.
+- **Season** — label, days, vertical, runs, average/day, best day, fetched from the phone
+  so all watches share one combined history.
+- **Titles:** `TODAY`, `YESTERDAY`, or `MMM DD` for a day; the season label for a season.
+  Vertical values are unsigned; there is no leading `+`.
+- **More** (Select from Main only) — End/Resume Day, Pause/Resume, Undo Last Lift, Units,
+  Vibration, Sync Now. Scrollable native-style menu with no header. The selected row uses a
+  black vertical bar at the left plus bold text, not an inverted row. Chevrons show when
+  more rows exist; the menu font is capped at 18 px.
 - **About screen removed.** Version/platform information lives in the README and appstore
   listing instead.
 - **Action bar:** exact native geometry (34 px Emery / 40 px Gabbro, 45/80 px icon
@@ -114,20 +124,22 @@ Centred vertical stack, no decoration, with the native action bar on the right:
   a straight bar; Gabbro is the firmware's `H × 19/9` circle clipped to the 40 px strip.
   Destination icons: Main = two peaks, Today = calendar, Season = stacked calendars,
   More = vertical ellipsis; in the menu, up/check/down. No press animation.
-- **Up/Down** cycle Main/Today/Season. **Back** exits; the day starts automatically when
-  the app opens, and state persists.
+- **Main:** Up opens Season, Down opens Today, Select opens More, Back exits; the day
+  starts automatically when the app opens, and state persists.
+- **Today / Season:** Up and Down step to older and newer summaries, with plain chevrons
+  only where a neighbour exists. Select is a no-op and its action-bar slot is blank; Back
+  returns to Main. More is reachable only from Main.
 - No touch requirement. Trips are phone-only.
 
 ## Testing
 
-- Detection, season/trip maths, persistence, and formatting live in one pure watch module,
+- Detection, season maths, persistence, and formatting live in one pure watch module,
   `src/embeddedjs/lib/core.js`; phone-side aggregation lives in `src/pkjs/lib/stats.js`.
-  Together they have 50 Node tests, including cross-checks that both season/trip
-  implementations agree.
+  Together with the PKJS sync/query handler tests, they have 49 Node tests.
 - Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, car climb,
   noisy GPS, missing altitude, long sample gap, day rollover.
-- The More menu carries **Debug: Mock Lift** while `DEBUG` is true, feeding a synthetic
-  climb through the real detector, store, UI, and sync path in the emulator.
+- The emulator's fake GPS has no altitude, so the old debug mock was removed to keep the
+  bundle inside the archive mapping limit. Detection needs a real watch and phone.
 - Field test: one gondola in town, plus at least one real ski-day GPS trace to replay.
 
 ## Implementation notes
@@ -139,15 +151,18 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - `src/c/mdbl.c` gives the engine an ~80 kB pool (stack 6 kB, slot 44 kB, chunk 28 kB).
   The action bar pushed the old 72 kB pool over; 88 kB failed to map the app archive.
 - Sync protocol: the watch sends one JSON record at a time in `Sync` and waits for an
-  `Ack` containing the record id. Kinds are `lift` and `lift-delete`. The phone dedupes
-  by `date + seq` and stores records in PKJS `localStorage`.
+  `Ack` containing the record id. Kinds are `lift` and `lift-delete`. The phone dedupes by
+  `uid` and stores records in PKJS `localStorage`.
+- History protocol: `Query` carries `{ kind, key }`; `Data` returns the same key plus the
+  day or season summary and its `older`/`newer` neighbours. The watch caps its summary
+  cache, prefetches one level, and drops the queue on suspend.
 - Settings travel both ways in the `Settings` key. The phone sends its stored settings on
   `ready`; the watch sends changes made on the wrist.
 - The dashboard is generated by PKJS as a `data:` URL with all stats pre-rendered; the
   settings form closes with `pebblejs://close#`.
 - The menu and detail screens scale from the watch's Text Size preference. A tiny FFI shim
   (`src/c/ffi.c`) exposes `preferred_content_size()` to JavaScript; the hero time stays
-  fixed at maximum size.
+  fixed at maximum size, and the menu font stops at 18 px.
 - There is no base/started flag: the day is tracked whenever the app is open and not
   paused or ended. End Day is explicit and survives relaunch; a new date starts fresh.
 - The app icon is a white rounded tile with two offset black peaks and a white snow cap on
@@ -159,13 +174,13 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 ## Implementation status
 
 - [x] Alloy project scaffolded for emery + gabbro
-- [x] Watch core and phone stats with 50 Node tests
+- [x] Watch core and phone stats with 49 Node tests
 - [x] Poco screens, native action bar, native-style More menu, and icon-only status
 - [x] Text Size/ContentSize FFI for the menu and detail fonts
 - [x] Two-peak mountain app icon (launcher + store sizes)
 - [x] Sync protocol, PKJS store, and ack/dedupe
+- [x] Phone-backed Today and Season history with prefetch
 - [x] Local dashboard with Today / Trips / Season / Settings
-- [x] Debug mock lift
 - [ ] Real-world threshold tuning
 - [ ] Accelerometer-gated GPS
 - [ ] Backcountry mode (issue #1)
@@ -176,4 +191,5 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - Whether to persist an in-progress lift across an app restart (only completed lifts
   survive today).
 - Whether a lift that spans midnight should count on its start day.
-- How much of the season history to keep on the watch before rolling old seasons up.
+- How much of the season history to keep on the watch before rolling old seasons up
+  (currently none: every past day and season is fetched from the phone).

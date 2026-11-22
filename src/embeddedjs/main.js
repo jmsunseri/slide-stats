@@ -6,7 +6,6 @@ import Message from "pebble/message";
 
 import * as Core from "core";
 
-const DEBUG = true;
 
 // The system Text Size preference. The FFI shim returns 0..3; default to Large.
 let contentSize = 2;
@@ -33,12 +32,21 @@ let sendingLift = false;
 let ackTimer = null;
 let statusNoGps = false;
 let lastProcessed = 0;
-let mockTimer = null;
 
 let menuOpen = false;
 let menuIndex = 0;
 let menuScroll = 0;
 let currentScreen = "main";
+let frameDay = null;
+let frameSeason = null;
+
+const history = { day: {}, season: {} };
+let selectedDayKey = null;
+let selectedSeasonKey = null;
+let queryQueue = [];
+let querying = false;
+let activeQuery = null;
+let queryTimer = null;
 
 /* ------------------------------------------------------------------ */
 /* Drawing                                                             */
@@ -69,9 +77,9 @@ const fontSuffix = new render.Font("Gothic-Bold", 14);
 const fontStats = new render.Font("Gothic-Bold", 24);
 const fontStatsSmall = new render.Font("Gothic-Bold", 18);
 
-const menuSize = contentSize === 0 ? 14 : (contentSize >= 3 && !ROUND ? 24 : 18);
+const menuSize = contentSize === 0 ? 14 : 18;
 const fontMenu = new render.Font("Gothic-Regular", menuSize);
-const fontMenuHeader = new render.Font("Gothic-Bold", menuSize);
+const fontMenuBold = new render.Font("Gothic-Bold", menuSize);
 const detailSize = contentSize === 0 ? 14 : 18;
 const fontTitle = new render.Font("Gothic-Bold", detailSize);
 const fontRow = new render.Font("Gothic-Regular", detailSize);
@@ -125,8 +133,56 @@ function drawStatusIcons() {
 }
 
 function isDayClosed() {
-	const today = store.getToday();
-	return !!(today && today.closed);
+	return store.isClosed();
+}
+
+function todayKey() {
+	return store.todayDate() || Core.dayKey(new Date());
+}
+
+function yesterdayKey() {
+	const date = new Date();
+	date.setDate(date.getDate() - 1);
+	return Core.dayKey(date);
+}
+
+function currentSeason() {
+	return Core.currentSeasonKey(new Date(), settings);
+}
+
+function displayedDay() {
+	if (!selectedDayKey)
+		return null;
+	if (selectedDayKey === todayKey()) {
+		const stats = store.todayStats();
+		const phone = history.day[selectedDayKey];
+		return {
+			date: selectedDayKey,
+			vertical: stats.vertical,
+			runs: stats.runs,
+			first: stats.first,
+			last: stats.last,
+			longest: stats.longest,
+			average: stats.average,
+			older: phone ? phone.older : null,
+			newer: phone ? phone.newer : null,
+		};
+	}
+	return history.day[selectedDayKey] || null;
+}
+
+function displayedSeason() {
+	if (!selectedSeasonKey)
+		return null;
+	return history.season[selectedSeasonKey] || null;
+}
+
+function dayTitle(key) {
+	if (key === todayKey())
+		return "TODAY";
+	if (key === yesterdayKey())
+		return "YESTERDAY";
+	return Core.formatDateShort(key);
 }
 
 function drawMain() {
@@ -158,24 +214,25 @@ function drawMain() {
 function detailData() {
 	const units = settings.units;
 	if (currentScreen === "season") {
-		const season = store.seasonSummary();
-		return ["SEASON", [
-			["Season", season.label],
-			["Days", String(season.days)],
-			["Vertical", Core.formatVertical(season.vertical, units)],
-			["Runs", String(season.runs)],
-			["Avg / day", Core.formatAverage(season.averageVertical, units)],
-			["Best day", season.bestDay ? Core.formatDateShort(season.bestDay.date) : "--"],
+		const season = frameSeason;
+		const label = season ? season.label : Core.seasonLabel(selectedSeasonKey);
+		return [label, [
+			["Days", season ? String(season.days) : "--"],
+			["Vertical", season ? Core.formatVertical(season.vertical, units) : "--"],
+			["Runs", season ? String(season.runs) : "--"],
+			["Avg / day", season ? Core.formatAverage(season.averageVertical, units) : "--"],
+			["Best day", season && season.bestDay ? Core.formatDateShort(season.bestDay.date) : "--"],
 		]];
 	}
-	const stats = store.todayStats();
-	return ["TODAY", [
-		["Vertical", Core.formatVertical(stats.vertical, units)],
-		["Runs", String(stats.runs)],
-		["First", stats.first ? Core.formatTime(new Date(stats.first), watch.hour12) : "--"],
-		["Last", stats.last ? Core.formatTime(new Date(stats.last), watch.hour12) : "--"],
-		["Average", Core.formatAverage(stats.average, units)],
-		["Longest", Core.formatVertical(stats.longest, units)],
+	const day = frameDay;
+	const title = selectedDayKey ? dayTitle(selectedDayKey) : "TODAY";
+	return [title, [
+		["Vertical", day ? Core.formatVertical(day.vertical, units) : "--"],
+		["Runs", day ? String(day.runs) : "--"],
+		["First", day && day.first ? Core.formatTime(new Date(day.first), watch.hour12) : "--"],
+		["Last", day && day.last ? Core.formatTime(new Date(day.last), watch.hour12) : "--"],
+		["Average", day ? Core.formatAverage(day.average, units) : "--"],
+		["Longest", day ? Core.formatVertical(day.longest, units) : "--"],
 	]];
 }
 
@@ -201,16 +258,11 @@ function drawChevron(cx, cy, up, color) {
 }
 
 function drawMenu() {
-	const headerHeight = fontMenuHeader.height + 10;
-	const top = ROUND ? 26 : 0;
+	const top = ROUND ? 26 : 2;
 	const left = MENU_LEFT;
 	const width = MENU_WIDTH;
-
-	render.fillRectangle(black, left, top, width, headerHeight);
-	drawCentered("MORE", fontMenuHeader, top + 5, white);
-
 	const rowHeight = fontMenu.height + 10;
-	const listTop = top + headerHeight + 4;
+	const listTop = top + 8;
 	const listBottom = H - 14;
 	let visible = Math.floor((listBottom - listTop) / rowHeight);
 	if (visible < 3)
@@ -224,19 +276,16 @@ function drawMenu() {
 	for (let i = 0; i < visible && menuScroll + i < MENU.length; i++) {
 		const index = menuScroll + i;
 		const y = listTop + i * rowHeight;
-		if (index === menuIndex) {
-			render.fillRectangle(black, left, y - 2, width, rowHeight - 2);
-			render.drawText(MENU[index].label(), fontMenu, white, left + 10, y);
-		}
-		else {
-			render.drawText(MENU[index].label(), fontMenu, black, left + 10, y);
-		}
+		const selected = index === menuIndex;
+		if (selected)
+			render.fillRectangle(black, left + 2, y + 1, 3, fontMenu.height - 2);
+		render.drawText(MENU[index].label(), selected ? fontMenuBold : fontMenu, black, left + 12, y);
 	}
 
 	if (menuScroll > 0)
-		drawChevron(MENU_LEFT + MENU_WIDTH - 14, top + 10, true, white);
+		drawChevron(left + (width >> 1), top + 2, true);
 	if (menuScroll + visible < MENU.length)
-		drawChevron(MENU_LEFT + (MENU_WIDTH >> 1), H - 9, false);
+		drawChevron(left + (width >> 1), H - 9, false);
 }
 
 /* ------------------------------------------------------------------ */
@@ -328,6 +377,8 @@ function drawBarCheck(cx, cy) {
 }
 
 function drawBarIcon(name, cx, cy) {
+	if (!name)
+		return;
 	if (name === "mountain")
 		drawBarMountain(cx, cy);
 	else if (name === "today")
@@ -362,13 +413,19 @@ function drawActionBar() {
 		render.fillRectangle(black, BAR_LEFT, 0, BAR_W, H);
 	}
 
-	const icons = menuOpen
-		? ["up", "check", "down"]
-		: currentScreen === "main"
-			? ["season", "more", "today"]
-			: currentScreen === "today"
-				? ["mountain", "more", "season"]
-				: ["today", "more", "mountain"];
+	let icons;
+	if (menuOpen)
+		icons = ["up", "check", "down"];
+	else if (currentScreen === "main")
+		icons = ["season", "more", "today"];
+	else if (currentScreen === "today") {
+		const day = frameDay;
+		icons = [day && day.older ? "up" : null, null, day && day.newer ? "down" : null];
+	}
+	else {
+		const season = frameSeason;
+		icons = [season && season.older ? "up" : null, null, season && season.newer ? "down" : null];
+	}
 	const cx = BAR_LEFT + (BAR_W >> 1) - (ROUND ? 2 : 0);
 	drawBarIcon(icons[0], cx, BAR_MARGIN + 9);
 	drawBarIcon(icons[1], cx, H >> 1);
@@ -376,15 +433,17 @@ function drawActionBar() {
 }
 
 function draw() {
+	frameDay = currentScreen === "today" ? displayedDay() : null;
+	frameSeason = currentScreen === "season" ? displayedSeason() : null;
 	render.begin();
 	render.fillRectangle(white, 0, 0, W, H);
+	drawActionBar();
 	if (menuOpen)
 		drawMenu();
 	else if (currentScreen === "main")
 		drawMain();
 	else
 		drawDetail();
-	drawActionBar();
 	render.end();
 }
 
@@ -400,8 +459,6 @@ const MENU = [
 	{ id: "vibration", label: () => "Vibration: " + (settings.vibration ? "On" : "Off") },
 	{ id: "sync", label: () => "Sync Now" },
 ];
-if (DEBUG)
-	MENU.push({ id: "mock", label: () => "Debug: Mock Lift" });
 
 /* ------------------------------------------------------------------ */
 /* Navigation                                                          */
@@ -415,6 +472,14 @@ function updateAll() {
 function showScreen(name) {
 	currentScreen = name;
 	menuOpen = false;
+	if (name === "today") {
+		selectedDayKey = todayKey();
+		queueSummary("day", selectedDayKey);
+	}
+	else if (name === "season") {
+		selectedSeasonKey = currentSeason();
+		queueSummary("season", selectedSeasonKey);
+	}
 	draw();
 }
 
@@ -535,7 +600,7 @@ function vibrate() {
 function setupMessage() {
 	try {
 		message = new Message({
-			keys: ["Sync", "Ack", "Settings"],
+			keys: ["Sync", "Ack", "Settings", "Query", "Data"],
 			input: 1024,
 			output: 1024,
 			onReadable() {
@@ -546,14 +611,26 @@ function setupMessage() {
 				const incoming = msg.get("Settings");
 				if (incoming)
 					applySettings(incoming);
+				const data = msg.get("Data");
+				if (data)
+					handleData(data);
 			},
 			onWritable() {
 				messageReady = true;
 				flushOutbox();
+				flushQuery();
 			},
 			onSuspend() {
 				messageReady = false;
 				sendingLift = false;
+				if (querying && activeQuery)
+					queryQueue.unshift(activeQuery);
+				querying = false;
+				activeQuery = null;
+				if (queryTimer) {
+					clearTimeout(queryTimer);
+					queryTimer = null;
+				}
 			},
 		});
 	}
@@ -577,6 +654,7 @@ function handleAck(payload) {
 		ackTimer = null;
 	}
 	flushOutbox();
+	flushQuery();
 }
 
 function flushOutbox() {
@@ -601,6 +679,93 @@ function flushOutbox() {
 	}
 }
 
+function queueSummary(kind, key) {
+	if (!key || history[kind][key])
+		return;
+	if (activeQuery && activeQuery.kind === kind && activeQuery.key === key)
+		return;
+	for (const item of queryQueue) {
+		if (item.kind === kind && item.key === key)
+			return;
+	}
+	queryQueue.push({ kind, key });
+	flushQuery();
+}
+
+function prefetch(kind, summary) {
+	if (!summary)
+		return;
+	if (summary.older)
+		queueSummary(kind, summary.older);
+	if (summary.newer)
+		queueSummary(kind, summary.newer);
+}
+
+function remember(kind, key, summary) {
+	history[kind][key] = summary;
+	const keys = Object.keys(history[kind]);
+	if (keys.length <= 6)
+		return;
+	const selected = kind === "day" ? selectedDayKey : selectedSeasonKey;
+	for (const old of keys) {
+		if (old !== key && old !== selected) {
+			delete history[kind][old];
+			break;
+		}
+	}
+}
+
+function flushQuery() {
+	if (!message || !messageReady || querying || sendingLift || !queryQueue.length)
+		return;
+	activeQuery = queryQueue.shift();
+	querying = true;
+	try {
+		message.write(new Map([["Query", JSON.stringify({ v: 1, kind: activeQuery.kind, key: activeQuery.key })]]));
+		queryTimer = setTimeout(() => {
+			querying = false;
+			if (activeQuery)
+				queryQueue.unshift(activeQuery);
+			activeQuery = null;
+			queryTimer = null;
+			flushQuery();
+		}, 8000);
+	}
+	catch (error) {
+		querying = false;
+		queryQueue.unshift(activeQuery);
+		activeQuery = null;
+		console.log("slide-stats: query write failed: " + error);
+	}
+}
+
+function handleData(raw) {
+	let data;
+	try {
+		data = JSON.parse(raw);
+	}
+	catch (error) {
+		console.log("slide-stats: bad history data: " + error);
+		return;
+	}
+	if (!data || !data.kind || !data.key || !data.summary)
+		return;
+	remember(data.kind, data.key, data.summary);
+	if (queryTimer) {
+		clearTimeout(queryTimer);
+		queryTimer = null;
+	}
+	querying = false;
+	activeQuery = null;
+	const selected = (data.kind === "day" && selectedDayKey === data.key) ||
+		(data.kind === "season" && selectedSeasonKey === data.key);
+	if (selected) {
+		prefetch(data.kind, data.summary);
+		draw();
+	}
+	flushQuery();
+}
+
 function sendSettings() {
 	if (!message || !messageReady)
 		return;
@@ -618,6 +783,11 @@ function applySettings(json) {
 		store.setSettings(next);
 		settings = store.getSettings();
 		detector.setOptions(settings.detection);
+		history.season = {};
+		if (currentScreen === "season") {
+			selectedSeasonKey = currentSeason();
+			queueSummary("season", selectedSeasonKey);
+		}
 		if (settings.paused || isDayClosed())
 			stopGps();
 		else
@@ -685,39 +855,6 @@ function toggleVibration() {
 	updateAll();
 }
 
-function startMockLift() {
-	if (isDayClosed())
-		store.resumeDay();
-	store.setPaused(false);
-	settings = store.getSettings();
-	detector.reset();
-	statusNoGps = false;
-	let altitude = 2000;
-	let direction = 1;
-	let timestamp = Date.now();
-	if (mockTimer)
-		clearInterval(mockTimer);
-	mockTimer = setInterval(() => {
-		timestamp += 1000;
-		altitude += direction * 10;
-		if (altitude >= 2100)
-			direction = -1;
-		if (direction < 0 && altitude <= 2000) {
-			clearInterval(mockTimer);
-			mockTimer = null;
-		}
-		handleEvents(detector.addSample({
-			t: timestamp,
-			altitude,
-			altitudeAccuracy: 5,
-			speed: 4,
-		}));
-	}, 1000);
-	if (!location)
-		startGps();
-	updateAll();
-}
-
 function activateMenu() {
 	const item = MENU[menuIndex];
 	if (!item)
@@ -745,19 +882,11 @@ function activateMenu() {
 			flushOutbox();
 			closeMenu();
 			break;
-		case "mock":
-			startMockLift();
-			closeMenu();
-			break;
 	}
 }
 
 function exitApp() {
 	stopGps();
-	if (mockTimer) {
-		clearInterval(mockTimer);
-		mockTimer = null;
-	}
 	if (message) {
 		try {
 			message.close();
@@ -771,6 +900,42 @@ function exitApp() {
 /* ------------------------------------------------------------------ */
 /* Input and lifecycle                                                 */
 /* ------------------------------------------------------------------ */
+
+function stepDay(delta) {
+	const day = displayedDay();
+	if (!day) {
+		queueSummary("day", selectedDayKey);
+		return;
+	}
+	const target = delta < 0 ? day.older : day.newer;
+	if (!target)
+		return;
+	selectedDayKey = target;
+	const cached = history.day[target];
+	if (cached)
+		prefetch("day", cached);
+	else
+		queueSummary("day", target);
+	draw();
+}
+
+function stepSeason(delta) {
+	const season = displayedSeason();
+	if (!season) {
+		queueSummary("season", selectedSeasonKey);
+		return;
+	}
+	const target = delta < 0 ? season.older : season.newer;
+	if (!target)
+		return;
+	selectedSeasonKey = target;
+	const cached = history.season[target];
+	if (cached)
+		prefetch("season", cached);
+	else
+		queueSummary("season", target);
+	draw();
+}
 
 const SCREENS = ["main", "today", "season"];
 
@@ -801,12 +966,26 @@ new Button({
 			return;
 		}
 
-		if (type === "up")
-			cycleScreen(-1);
-		else if (type === "down")
-			cycleScreen(1);
-		else if (type === "select")
-			openMenu();
+		if (type === "up") {
+			if (currentScreen === "main")
+				cycleScreen(-1);
+			else if (currentScreen === "today")
+				stepDay(-1);
+			else if (currentScreen === "season")
+				stepSeason(-1);
+		}
+		else if (type === "down") {
+			if (currentScreen === "main")
+				cycleScreen(1);
+			else if (currentScreen === "today")
+				stepDay(1);
+			else if (currentScreen === "season")
+				stepSeason(1);
+		}
+		else if (type === "select") {
+			if (currentScreen === "main")
+				openMenu();
+		}
 		else if (type === "back") {
 			if (currentScreen !== "main")
 				showScreen("main");

@@ -69,6 +69,7 @@ function saveSettings(settings) {
 function cleanLift(record) {
 	return {
 		seq: record.seq,
+		uid: record.uid,
 		startTime: record.startTime,
 		endTime: record.endTime,
 		startAltitude: record.startAltitude,
@@ -95,7 +96,7 @@ function handleSync(raw) {
 	const list = lifts[record.date] || [];
 
 	if (record.kind === "lift-delete") {
-		const remaining = list.filter(item => item.seq !== record.seq);
+		const remaining = list.filter(item => record.uid ? item.uid !== record.uid : item.seq !== record.seq);
 		if (remaining.length)
 			lifts[record.date] = remaining;
 		else
@@ -103,7 +104,7 @@ function handleSync(raw) {
 	}
 	else {
 		const clean = cleanLift(record);
-		const index = list.findIndex(item => item.seq === record.seq);
+		const index = list.findIndex(item => record.uid ? item.uid === record.uid : item.seq === record.seq);
 		if (index >= 0)
 			list[index] = clean;
 		else
@@ -118,6 +119,33 @@ function handleSync(raw) {
 		{ Ack: JSON.stringify({ id: record.id }) },
 		function () {},
 		function (error) { console.log("slide-stats: ack failed: " + JSON.stringify(error)); }
+	);
+}
+
+function handleQuery(raw) {
+	let query;
+	try {
+		query = JSON.parse(raw);
+	}
+	catch (error) {
+		console.log("slide-stats: bad query: " + error);
+		return;
+	}
+	if (!query || !query.kind || !query.key)
+		return;
+	const lifts = loadLifts();
+	const settings = loadSettings() || DEFAULT_SETTINGS;
+	let summary;
+	if (query.kind === "day")
+		summary = stats.daySummary(lifts, query.key);
+	else if (query.kind === "season")
+		summary = stats.seasonSummary(lifts, settings, query.key, new Date());
+	else
+		return;
+	Pebble.sendAppMessage(
+		{ Data: JSON.stringify({ v: 1, kind: query.kind, key: query.key, summary }) },
+		function () {},
+		function (error) { console.log("slide-stats: data send failed: " + JSON.stringify(error)); }
 	);
 }
 
@@ -146,6 +174,8 @@ Pebble.addEventListener("appmessage", function (event) {
 		handleSync(payload.Sync);
 	if (typeof payload.Settings === "string")
 		handleSettings(payload.Settings);
+	if (typeof payload.Query === "string")
+		handleQuery(payload.Query);
 });
 
 Pebble.addEventListener("showConfiguration", function () {

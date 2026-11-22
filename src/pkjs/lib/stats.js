@@ -51,13 +51,22 @@ function seasonLabel(key) {
 
 function formatDateShort(key) {
 	const date = parseKey(key);
-	return MONTHS[date.getMonth()] + " " + date.getDate();
+	return MONTHS[date.getMonth()] + " " + pad2(date.getDate());
 }
 
 function aggregateLifts(lifts) {
 	const days = {};
 	for (const key of Object.keys(lifts || {})) {
-		const list = (lifts[key] || []).filter(lift => lift && isFinite(lift.gain) && lift.gain > 0);
+		const seen = {};
+		const list = (lifts[key] || []).filter(lift => {
+			if (!lift || !isFinite(lift.gain) || lift.gain <= 0)
+				return false;
+			const id = lift.uid ? "u:" + lift.uid : "s:" + lift.seq;
+			if (seen[id])
+				return false;
+			seen[id] = true;
+			return true;
+		});
 		if (!list.length)
 			continue;
 		list.sort((a, b) => (a.seq || 0) - (b.seq || 0));
@@ -145,6 +154,64 @@ function groupTrips(keys, days, gap = 2) {
 	});
 }
 
+function adjacent(keys, key) {
+	const sorted = keys.slice().sort();
+	let older = null;
+	let newer = null;
+	for (const item of sorted) {
+		if (item < key)
+			older = item;
+		else if (item > key && newer === null)
+			newer = item;
+	}
+	return { older, newer };
+}
+
+function daySummary(lifts, key) {
+	const days = aggregateLifts(lifts);
+	const day = days[key];
+	const edges = adjacent(Object.keys(days), key);
+	return {
+		date: key,
+		vertical: day ? day.v : 0,
+		runs: day ? day.r : 0,
+		first: day ? day.first : null,
+		last: day ? day.last : null,
+		longest: day ? day.longest : 0,
+		average: day && day.r ? Math.round(day.v / day.r) : 0,
+		older: edges.older,
+		newer: edges.newer,
+	};
+}
+
+function seasonKeysFor(lifts, settings, now) {
+	const days = aggregateLifts(lifts);
+	const keys = {};
+	keys[seasonKey(dayKey(now || new Date()), settings)] = true;
+	for (const day of Object.keys(days))
+		keys[seasonKey(day, settings)] = true;
+	return Object.keys(keys).sort().reverse();
+}
+
+function seasonSummary(lifts, settings, key, now) {
+	const days = aggregateLifts(lifts);
+	const keys = Object.keys(days).filter(day => seasonKey(day, settings) === key);
+	const totals = totalsFor(keys, days);
+	const allSeasons = seasonKeysFor(lifts, settings, now);
+	const edges = adjacent(allSeasons, key);
+	return {
+		key,
+		label: seasonLabel(key),
+		days: totals.daysCount,
+		vertical: totals.vertical,
+		runs: totals.runs,
+		averageVertical: totals.averageVertical,
+		bestDay: totals.bestDay,
+		older: edges.older,
+		newer: edges.newer,
+	};
+}
+
 function summarize(lifts, settings, now) {
 	settings = settings || {};
 	const days = aggregateLifts(lifts);
@@ -190,6 +257,9 @@ function summarize(lifts, settings, now) {
 
 module.exports = {
 	summarize,
+	daySummary,
+	seasonSummary,
+	seasonKeysFor,
 	aggregateLifts,
 	totalsFor,
 	groupTrips,

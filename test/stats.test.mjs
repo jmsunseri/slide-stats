@@ -45,6 +45,28 @@ test("aggregateLifts builds day totals and ignores empty or bad lifts", () => {
 	assert.equal(days["2026-03-12"], undefined);
 });
 
+test("aggregateLifts dedupes by uid but keeps watches with the same seq", () => {
+	const days = stats.aggregateLifts({
+		"2026-03-14": [
+			{ seq: 1, uid: "2026-03-14:1:a", gain: 400, startTime: at(3, 14, 9), endTime: at(3, 14, 9, 5) },
+			{ seq: 1, uid: "2026-03-14:1:b", gain: 500, startTime: at(3, 14, 10), endTime: at(3, 14, 10, 5) },
+			{ seq: 1, uid: "2026-03-14:1:a", gain: 400, startTime: at(3, 14, 9), endTime: at(3, 14, 9, 5) },
+		],
+	});
+	assert.equal(days["2026-03-14"].v, 900);
+	assert.equal(days["2026-03-14"].r, 2);
+});
+
+test("aggregateLifts dedupes legacy records with the same seq", () => {
+	const days = stats.aggregateLifts({
+		"2026-03-14": [
+			{ seq: 2, gain: 400, startTime: at(3, 14, 9), endTime: at(3, 14, 9, 5) },
+			{ seq: 2, gain: 400, startTime: at(3, 14, 9), endTime: at(3, 14, 9, 5) },
+		],
+	});
+	assert.equal(days["2026-03-14"].r, 1);
+});
+
 test("summarize reports today, the season, trips, days, and all time", () => {
 	const summary = stats.summarize(LIFTS, SETTINGS, new Date(2026, 2, 14, 12, 0));
 	assert.equal(summary.today.v, 920);
@@ -66,15 +88,7 @@ test("summarize reports today, the season, trips, days, and all time", () => {
 	assert.equal(summary.allTime.daysCount, 4);
 });
 
-test("trip gap rules match the watch", () => {
-	const days = stats.aggregateLifts(LIFTS);
-	const phoneTrips = stats.groupTrips(Object.keys(days), days, 2);
-	const watchTrips = Core.groupTrips(Object.keys(days), days, 2);
-	assert.equal(phoneTrips.length, watchTrips.length);
-	assert.deepEqual(phoneTrips.map(trip => trip.days), watchTrips.map(trip => trip.days));
-});
-
-test("season keys match the watch for northern, southern, custom, and none", () => {
+test("season keys match the watch for northern and southern", () => {
 	const settingsList = [
 		{ seasonMode: "north" },
 		{ seasonMode: "south" },
@@ -85,6 +99,52 @@ test("season keys match the watch for northern, southern, custom, and none", () 
 			assert.equal(stats.seasonKey(date, settings), Core.seasonKey(date, settings),
 				JSON.stringify(settings) + " " + date);
 	}
+});
+
+test("day summary includes adjacent keys and unsigned totals", () => {
+	const day = stats.daySummary(LIFTS, "2026-03-14");
+	assert.equal(day.vertical, 920);
+	assert.equal(day.runs, 2);
+	assert.equal(day.longest, 520);
+	assert.equal(day.average, 460);
+	assert.equal(day.older, "2026-03-12");
+	assert.equal(day.newer, null);
+
+	const middle = stats.daySummary(LIFTS, "2026-03-11");
+	assert.equal(middle.vertical, 0);
+	assert.equal(middle.runs, 0);
+	assert.equal(middle.older, "2026-03-10");
+	assert.equal(middle.newer, "2026-03-12");
+});
+
+test("seasonKeysFor includes every stored season, newest first", () => {
+	const lifts = Object.assign({}, LIFTS, {
+		"2025-08-01": [lift(1, 8, 1, 9, 900)],
+	});
+	assert.deepEqual(
+		stats.seasonKeysFor(lifts, SETTINGS, new Date(2026, 2, 14)),
+		["2025", "2024"]
+	);
+	// The current season is included even before it has a lift.
+	assert.deepEqual(
+		stats.seasonKeysFor({}, SETTINGS, new Date(2026, 2, 14)),
+		["2025"]
+	);
+});
+
+test("season summary returns adjacent season keys", () => {
+	const lifts = Object.assign({}, LIFTS, {
+		"2025-08-01": [lift(1, 8, 1, 9, 900)],
+	});
+	const current = stats.seasonSummary(lifts, SETTINGS, "2025", new Date(2026, 2, 14));
+	assert.equal(current.vertical, 2020);
+	assert.equal(current.older, "2024");
+	assert.equal(current.newer, null);
+
+	const previous = stats.seasonSummary(lifts, SETTINGS, "2024", new Date(2026, 2, 14));
+	assert.equal(previous.vertical, 900);
+	assert.equal(previous.older, null);
+	assert.equal(previous.newer, "2025");
 });
 
 test("a day with no lifts does not appear in the season", () => {

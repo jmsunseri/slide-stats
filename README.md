@@ -30,18 +30,34 @@ A working first version:
 - Time at the true vertical centre — centred in the content area on Emery and in the circle on Gabbro — with runs and vertical directly below
 - Native action bar on the right: straight on Emery, curved on Gabbro, with
   destination icons for Up/Select/Down
+- Phone-backed Today and Season history: Up/Down walk older and newer days or seasons,
+  while today's numbers stay live on the watch
 - Icon-only status: pause and no-GPS, and only when they need attention
-- Native-style scrolling More menu that follows the watch's Text Size setting
+- Native-style scrolling More menu with no header, bold text, and a black left bar for the
+  selected row; fonts follow the watch's Text Size setting up to an 18 px cap
 - Two-peak mountain app icon with a snow cap
 - North/South seasons, re-bucketed automatically if the setting changes
 - One-blob persistence with a sync outbox that drains on launch
-- Lift sync to PebbleKit JS, deduped on the phone
+- Lift sync to PebbleKit JS with unique record ids, so reinstalls, seq resets, and a
+  second watch cannot double-count
 - Local dashboard: Today, Trips, Season, Settings, with live metric/imperial conversion
   for units and lift-detection thresholds
 - Metric by default
 
 Not done yet: real-world threshold tuning, accelerometer-gated GPS, backcountry mode
 (issue #1), and bar/text colour presets (issue #2).
+
+## Using it
+
+- **Main:** Up opens Season, Down opens Today, Select opens More, Back exits.
+- **Today / Season:** Up and Down move to older and newer days or seasons; the action bar
+  shows plain chevrons only in the directions that exist. Select does nothing and Back
+  returns to Main.
+- Day titles are **TODAY**, **YESTERDAY**, or **MMM DD**; season titles are the season
+  label, such as **2026–27**. Vertical values are unsigned.
+- Today's totals are read live from the watch. Past days and all seasons come from the
+  phone, which keeps the full history and answers one summary at a time. The watch
+  prefetches only the selected summary's immediate neighbours.
 
 ## Screens
 
@@ -100,30 +116,37 @@ then Select again.
 
 ## Tests
 
-The detector, season/trip maths, day store, and formatting live in
-`src/embeddedjs/lib/core.js`; phone-side aggregation is in `src/pkjs/lib/stats.js`.
-There are 50 tests. Run them with Node 22 or newer:
+The detector, season keys, day store, and formatting live in
+`src/embeddedjs/lib/core.js`; phone-side aggregation, trip maths, and summaries are in
+`src/pkjs/lib/stats.js`.
+There are 49 tests, including the phone sync/query handlers. Run them with Node 22 or
+newer:
 
 ```sh
 node --test test/*.test.mjs
 ```
 
-## Debug mock
+## Testing in the emulator
 
-While `DEBUG` is true at the top of `src/embeddedjs/main.js`, the More menu ends with
-**Debug: Mock Lift**. It feeds a synthetic 100 m climb and descent through the same
-detector, day store, UI, and sync path, which is how the app is tested in the emulator
-(the emulator's fake GPS has no altitude). Remove the flag before publishing.
+The emulator's fake GPS reports no altitude, so lift detection cannot be exercised there.
+The detector, store, phone summaries, and message handlers are covered by the Node tests;
+real detection needs a watch and phone outdoors. The temporary mock-lift menu item was
+removed to keep the app bundle inside the watch's archive mapping limit.
 
 ## How the data moves
 
-- The **watch** owns today: today's lifts, per-day aggregates, and an outbox of
-  unacknowledged records. Everything is one `localStorage` blob. A day starts when the
-  app opens; there is no base altitude to set.
-- After each completed lift the watch sends one `Sync` message. The phone stores it under
-  `date + seq`, so a retry cannot duplicate a lift, and replies with an `Ack`.
+- The **watch** owns today: today's lifts and an outbox of unacknowledged records.
+  Everything is one `localStorage` blob. A day starts when the app opens; there is no base
+  altitude to set.
+- After each completed lift the watch sends one `Sync` message. Every record carries a
+  unique `uid`; the phone dedupes by `uid` (falling back to `seq` for older records) and
+  replies with an `Ack`. A retry cannot duplicate a lift, and two watches can share one
+  combined history without per-watch totals.
 - The **phone** owns history. Lift records live in PebbleKit JS `localStorage`, which
   survives app restarts and upgrades.
+- The watch asks for one day or season summary at a time with `Query`; the phone answers
+  with `Data`. Today's totals stay local; the phone supplies past-day totals and the
+  neighbouring keys. The watch caches only a handful of summaries and prefetches one level.
 - The phone builds the stats page locally as a `data:` URL and opens it from the Pebble
   mobile app's settings gear. No server, no account, no network.
 

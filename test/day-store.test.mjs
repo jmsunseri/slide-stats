@@ -58,16 +58,11 @@ test("adding lifts updates today, days, and the outbox without a base", () => {
 	assert.equal(stats.longest, 400);
 	assert.equal(stats.average, 376);
 
-	const day = store.getDays()["2026-03-14"];
-	assert.equal(day.v, 751);
-	assert.equal(day.r, 2);
-	assert.equal(day.first, 1000);
-	assert.equal(day.last, 9000);
-
 	const outbox = store.getOutbox();
 	assert.equal(outbox.length, 2);
-	assert.equal(outbox[0].id, "2026-03-14:1");
-	assert.equal(outbox[1].id, "2026-03-14:2");
+	assert.equal(outbox[0].id, outbox[0].uid);
+	assert.equal(outbox[1].id, outbox[1].uid);
+	assert.ok(outbox[0].uid.indexOf("2026-03-14:1:") === 0);
 	assert.equal(outbox[0].kind, "lift");
 	assert.equal(outbox[0].gain, 400);
 });
@@ -97,13 +92,12 @@ test("undo removes the lift and queues a delete record", () => {
 	assert.equal(removed.seq, 2);
 	assert.equal(store.todayStats().runs, 1);
 	assert.equal(store.todayStats().vertical, 400);
-	assert.equal(store.getDays()["2026-03-14"].v, 400);
 	assert.equal(store.getOutbox().at(-1).kind, "lift-delete");
 	assert.equal(store.getOutbox().at(-1).seq, 2);
+	assert.ok(store.getOutbox().at(-1).uid);
 
 	store.undoLastLift();
 	assert.equal(store.todayStats().runs, 0);
-	assert.equal(store.getDays()["2026-03-14"], undefined);
 });
 
 test("midnight rollover starts a fresh day and keeps tracking", () => {
@@ -118,7 +112,6 @@ test("midnight rollover starts a fresh day and keeps tracking", () => {
 	assert.equal(store.getToday().date, "2026-03-15");
 	assert.equal(store.isTracking(), true);
 	assert.equal(store.todayStats().runs, 0);
-	assert.equal(store.getDays()["2026-03-14"].v, 300);
 });
 
 test("launching on a new day starts a fresh day", () => {
@@ -140,9 +133,10 @@ test("acks drain the outbox", () => {
 	store.addLift(lift(400, 1000, 5000));
 	store.addLift(lift(300, 6000, 9000));
 
-	store.ack("2026-03-14:1");
+	const firstId = store.getOutbox()[0].id;
+	store.ack(firstId);
 	assert.equal(store.getOutbox().length, 1);
-	assert.equal(store.getOutbox()[0].id, "2026-03-14:2");
+	assert.equal(store.getOutbox()[0].seq, 2);
 	store.ack("missing");
 	assert.equal(store.getOutbox().length, 1);
 });
@@ -176,20 +170,6 @@ test("pause stops tracking independently of the day state", () => {
 	assert.equal(store.isTracking(), false);
 	store.setPaused(false);
 	assert.equal(store.isTracking(), true);
-});
-
-test("season summary sees today's stored aggregate", () => {
-	const clock = fakeClock(new Date(2026, 3, 1, 9, 0).getTime());
-	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
-	store.addLift(lift(400, 1000, 5000));
-	store.addLift(lift(350, 6000, 9000));
-
-	const summary = store.seasonSummary();
-	assert.equal(summary.label, "2025-26");
-	assert.equal(summary.days, 1);
-	assert.equal(summary.vertical, 750);
-	assert.equal(summary.runs, 2);
-	assert.equal(summary.bestDay.date, dayKey(new Date(2026, 3, 1)));
 });
 
 test("a climb alone does not increment runs; an end event does", () => {

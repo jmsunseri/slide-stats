@@ -261,42 +261,10 @@ function createLiftDetector(options = {}) {
 		return events;
 	}
 
-	function state() {
-		let candidateGain = 0;
-		let candidateWindow = 0;
-		const now = lastAcceptedTime;
-		if (now !== null) {
-			const samples = windowSamples(now, config.slowWindowMs);
-			if (samples.length >= 2) {
-				const low = lowest(samples);
-				const latest = samples[samples.length - 1];
-				candidateGain = latest.smooth - low.smooth;
-				candidateWindow = now - samples[0].t;
-			}
-		}
-		return {
-			phase,
-			lift: active ? {
-				startTime: active.start.t,
-				startAltitude: active.start.alt,
-				peakTime: active.peak.t,
-				peakAltitude: active.peak.alt,
-				gain: active.peak.alt - active.start.alt,
-			} : null,
-			candidateGain,
-			candidateWindow,
-			lastAltitude,
-			lastSampleTime: lastAcceptedTime,
-			endCount,
-		};
-	}
-
 	return {
 		addSample,
-		state,
 		reset,
 		setOptions,
-		config: () => Object.assign({}, config),
 	};
 }
 
@@ -329,12 +297,6 @@ function dateFromKey(key) {
 	return new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
 }
 
-/** Days since the UTC epoch, used only for calendar-day differences. */
-function dayNumber(key) {
-	const parts = key.split("-");
-	return Math.floor(Date.UTC(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2])) / 86400000);
-}
-
 function seasonStart(settings = {}) {
 	return settings.seasonMode === "south" ? { month: 3, day: 1 } : { month: 9, day: 1 };
 }
@@ -362,87 +324,6 @@ function seasonLabel(key) {
 function currentSeasonKey(now, settings = {}) {
 	return seasonKey(dayKey(now), settings);
 }
-
-function totalsFor(keys, days) {
-	let vertical = 0;
-	let runs = 0;
-	let best = null;
-	for (const key of keys) {
-		const day = days[key];
-		if (!day)
-			continue;
-		vertical += day.v || 0;
-		runs += day.r || 0;
-		if (!best || (day.v || 0) > (best.v || 0))
-			best = { date: key, v: day.v || 0, r: day.r || 0 };
-	}
-	const daysCount = keys.filter(key => days[key]).length;
-	return {
-		daysCount,
-		vertical,
-		runs,
-		averageVertical: daysCount ? Math.round(vertical / daysCount) : 0,
-		averageRuns: daysCount ? Math.round((runs / daysCount) * 10) / 10 : 0,
-		bestDay: best,
-	};
-}
-
-/**
- * Group ride days into trips. A gap of two or fewer rest days links two days:
- * Friday and Monday are the same trip (two days in between), Friday and Tuesday
- * are not.
- */
-function groupTrips(keys, days, gap = 2) {
-	const sorted = keys.slice().sort();
-	const trips = [];
-	let current = null;
-	for (const key of sorted) {
-		if (!days[key])
-			continue;
-		const number = dayNumber(key);
-		if (!current || number - current.lastNumber > gap + 1) {
-			current = { start: key, end: key, lastNumber: number, days: [] };
-			trips.push(current);
-		}
-		current.end = key;
-		current.lastNumber = number;
-		current.days.push(key);
-	}
-
-	return trips.map(trip => {
-		const totals = totalsFor(trip.days, days);
-		return {
-			start: trip.start,
-			end: trip.end,
-			days: trip.days,
-			daysCount: totals.daysCount,
-			vertical: totals.vertical,
-			runs: totals.runs,
-			averageVertical: totals.averageVertical,
-			averageRuns: totals.averageRuns,
-			bestDay: totals.bestDay,
-		};
-	});
-}
-
-function summarize(days, settings, now) {
-	const currentKey = currentSeasonKey(now, settings);
-	const keys = Object.keys(days).filter(key => seasonKey(key, settings) === currentKey);
-	const totals = totalsFor(keys, days);
-	const trips = groupTrips(keys, days, 2);
-	return {
-		seasonKey: currentKey,
-		label: seasonLabel(currentKey, settings),
-		days: totals.daysCount,
-		vertical: totals.vertical,
-		runs: totals.runs,
-		averageVertical: totals.averageVertical,
-		averageRuns: totals.averageRuns,
-		bestDay: totals.bestDay,
-		trips,
-	};
-}
-
 
 /* ------------------------------------------------------------------ */
 /* Day store                                                           */
@@ -495,12 +376,15 @@ function emptyDay(key) {
 	};
 }
 
+function makeUid(date, seq) {
+	return date + ":" + seq + ":" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
 function createDayStore(options = {}) {
 	const storage = options.storage;
 	const now = options.now || (() => Date.now());
 
 	let settings = clone(DEFAULT_SETTINGS);
-	let days = {};
 	let today = null;
 	let outbox = [];
 	let nextSeq = 1;
@@ -512,7 +396,6 @@ function createDayStore(options = {}) {
 			storage.setItem(STATE_KEY, JSON.stringify({
 				v: STATE_VERSION,
 				settings,
-				days,
 				today,
 				outbox,
 				nextSeq,
@@ -536,7 +419,6 @@ function createDayStore(options = {}) {
 
 		if (stored) {
 			settings = mergeSettings(DEFAULT_SETTINGS, stored.settings || {});
-			days = stored.days || {};
 			today = stored.today || null;
 			outbox = stored.outbox || [];
 			nextSeq = stored.nextSeq || 1;
@@ -558,24 +440,14 @@ function createDayStore(options = {}) {
 		return { changed: true, previousDate: previous ? previous.date : null };
 	}
 
-	function aggregate(key) {
-		if (!days[key]) {
-			days[key] = {
-				v: 0,
-				r: 0,
-				first: null,
-				last: null,
-			};
-		}
-		return days[key];
-	}
-
 	function addLift(lift) {
 		ensureToday();
 		const key = today.date;
 		const seq = nextSeq++;
+		const uid = makeUid(key, seq);
 		const stored = {
 			seq,
+			uid,
 			startTime: lift.startTime,
 			endTime: lift.endTime,
 			startAltitude: Math.round(lift.startAltitude),
@@ -586,17 +458,12 @@ function createDayStore(options = {}) {
 		};
 		today.lifts.push(stored);
 
-		const day = aggregate(key);
-		day.v += stored.gain;
-		day.r += 1;
-		day.first = day.first === null ? stored.startTime : Math.min(day.first, stored.startTime);
-		day.last = day.last === null ? stored.endTime : Math.max(day.last, stored.endTime);
-
 		outbox.push(Object.assign({
-			id: key + ":" + seq,
+			id: uid,
 			kind: "lift",
 			date: key,
 			seq,
+			uid,
 		}, stored));
 
 		save();
@@ -610,30 +477,12 @@ function createDayStore(options = {}) {
 		if (!lift)
 			return null;
 
-		const day = days[key];
-		if (day) {
-			day.v -= lift.gain;
-			day.r -= 1;
-			if (day.r <= 0 || day.v <= 0) {
-				delete days[key];
-			}
-			else {
-				let first = null;
-				let last = null;
-				for (const item of today.lifts) {
-					first = first === null ? item.startTime : Math.min(first, item.startTime);
-					last = last === null ? item.endTime : Math.max(last, item.endTime);
-				}
-				day.first = first;
-				day.last = last;
-			}
-		}
-
 		outbox.push({
-			id: key + ":" + lift.seq + ":delete",
+			id: lift.uid + ":delete",
 			kind: "lift-delete",
 			date: key,
 			seq: lift.seq,
+			uid: lift.uid,
 		});
 		save();
 		return lift;
@@ -672,6 +521,14 @@ function createDayStore(options = {}) {
 		return !!today && !today.closed && !settings.paused;
 	}
 
+	function isClosed() {
+		return !!(today && today.closed);
+	}
+
+	function todayDate() {
+		return today ? today.date : null;
+	}
+
 	function todayStats() {
 		const lifts = today ? today.lifts : [];
 		let vertical = 0;
@@ -691,12 +548,7 @@ function createDayStore(options = {}) {
 			last,
 			longest,
 			average: lifts.length ? Math.round(vertical / lifts.length) : 0,
-			lifts: lifts.slice(),
 		};
-	}
-
-	function seasonSummary() {
-		return summarize(days, settings, new Date(now()));
 	}
 
 	const self = {
@@ -711,11 +563,11 @@ function createDayStore(options = {}) {
 		setPaused,
 		ack,
 		isTracking,
+		isClosed,
+		todayDate,
 		todayStats,
-		seasonSummary,
 		getSettings: () => clone(settings),
 		getToday: () => (today ? clone(today) : null),
-		getDays: () => clone(days),
 		getOutbox: () => clone(outbox),
 		getNextSeq: () => nextSeq,
 	};
@@ -757,9 +609,6 @@ function toFeet(metres) {
 	return metres * METRES_TO_FEET;
 }
 
-function fromFeet(feet) {
-	return feet / METRES_TO_FEET;
-}
 
 function unitLabel(units, short) {
 	if (units === "imperial")
@@ -767,12 +616,6 @@ function unitLabel(units, short) {
 	return short ? "m" : "metres";
 }
 
-function formatAltitude(metres, units) {
-	if (metres === null || metres === undefined || !isFinite(metres))
-		return "--";
-	const value = units === "imperial" ? toFeet(metres) : metres;
-	return groupThousands(value) + " " + unitLabel(units, true);
-}
 
 function formatVertical(metres, units) {
 	if (metres === null || metres === undefined || !isFinite(metres))
@@ -806,27 +649,10 @@ function formatDateShort(key) {
 	const parts = key.split("-");
 	const month = Number(parts[1]);
 	const day = Number(parts[2]);
-	return MONTHS[month - 1] + " " + day;
+	return MONTHS[month - 1] + " " + (day < 10 ? "0" + day : day);
 }
 
-function formatDateRange(startKey, endKey) {
-	return startKey === endKey
-		? formatDateShort(startKey)
-		: formatDateShort(startKey) + " - " + formatDateShort(endKey);
-}
 
-function formatDuration(ms) {
-	if (!isFinite(ms) || ms <= 0)
-		return "0m";
-	const totalMinutes = Math.round(ms / 60000);
-	const hours = Math.floor(totalMinutes / 60);
-	const minutes = totalMinutes % 60;
-	if (hours && minutes)
-		return hours + "h " + minutes + "m";
-	if (hours)
-		return hours + "h";
-	return minutes + "m";
-}
 
 function formatAverage(value, units) {
 	if (!isFinite(value))
@@ -843,24 +669,16 @@ export {
 	STATE_KEY,
 	dayKey,
 	dateFromKey,
-	dayNumber,
 	seasonKey,
 	seasonLabel,
 	currentSeasonKey,
-	summarize,
-	groupTrips,
-	totalsFor,
 	pad2,
 	groupThousands,
 	toFeet,
-	fromFeet,
 	unitLabel,
-	formatAltitude,
 	formatVertical,
 	formatClock,
 	formatTime,
 	formatDateShort,
-	formatDateRange,
-	formatDuration,
 	formatAverage,
 };
