@@ -21,16 +21,24 @@ permission granted.
 
 ## Status
 
-Design phase. The detection thresholds, data model, and UI are being settled before the
-first implementation. See `docs/design.md`.
+Early implementation. The pure lift detector and its headless tests are in place; the day
+store, sync, and UI are next. See `docs/design.md` for the settled design.
 
 ## Development
+
+Build and run:
 
 ```sh
 pebble build
 pebble install --emulator emery
 pebble install --emulator gabbro
 pebble logs --emulator emery
+```
+
+Run the detector tests with Node 22 or newer:
+
+```sh
+node --test test/*.test.mjs
 ```
 
 ## Data

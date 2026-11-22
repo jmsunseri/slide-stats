@@ -21,8 +21,8 @@ still needs a decision.
 - The only phone UI available to a watchapp is the config-page WebView, opened from the
   gear icon in the Pebble app. PKJS can generate it as a `data:` URL, so the dashboard can
   be fully local.
-- The config page can only open while PKJS is running, i.e. while the watch app is
-  running. **Open:** confirm this is acceptable for v1.
+- The config page needs PKJS running. In practice the mobile app launches the watch app
+  when the settings gear is tapped, so this is not a user-visible limitation.
 - `pebble new-project --alloy` targets `emery` and `gabbro` by default.
 
 ## Product decisions
@@ -37,7 +37,7 @@ still needs a decision.
 - **Season:** a 12-month window starting on a fixed month/day, labelled by its start year.
   Northern = Sep 1, Southern = Mar 1, plus Custom and None. Northern default.
 - **Trips:** ride days separated by ≤ 2 intervening rest days group into one trip. On by
-  default, can be hidden.
+  default, can be hidden. Trips are shown on the phone only.
 - **Sync:** watch owns today, phone owns history. Lift records sync after each completed
   lift; unacked records flush on launch. Phone dedupes by `dayKey + sequence`.
 - **Dashboard:** local config page with Today / Trips / Season / Settings. No export in
@@ -61,8 +61,9 @@ Centred vertical stack, no decoration, same layout on both screens:
 - Time is the largest element (Roboto Bold 49, follows `watch.hour12`).
 - Absolute GPS altitude below (Gothic Bold 28).
 - Runs and day vertical on one line (Gothic 18), updated when a lift ends.
-- No `READY` text. Small status icons only when something needs attention: on a lift,
-  paused, no GPS. **Open:** exact icon set and drawing method.
+- No `READY` text and no always-on "tracking" dot. Exception-only icons at the bottom:
+  up-chevron while on a lift, pause bars when paused, crossed satellite when GPS or
+  altitude is missing.
 - Time + altitude redraw on `minutechange`; totals only on lift end; status only on state
   change. No animations, no forced backlight.
 
@@ -74,13 +75,15 @@ Centred vertical stack, no decoration, same layout on both screens:
 - **Slow start:** net gain ≥ 10 m within 90 s (covers bunny lifts and magic carpets).
 - Most samples in the window must be rising, not a single noise spike.
 - Optional max-speed gate: ignore samples while horizontal speed > 8 m/s (cars).
-- **End:** smoothed altitude ≥ 5 m below the lift peak for two samples.
-- **Backstop:** if there is no net gain for 10 minutes, end the lift. This is only for the
-  case where the skier got off and did not descend 5 m (stood at the top, or walked
-  horizontally to another lift). Skiing down 5 m ends the lift immediately; normal lift
-  stops are short enough to sit inside the 10-minute window.
-- **Minimum counted lift:** 10 m, adjustable 5–50 m.
-- Vibration: optional, default on. Pulse on lift start and lift end.
+- Detection runs on the median-filtered altitude. The lift's start and peak are recorded
+  from raw altitudes so the filter does not shave metres off short lifts.
+- **End:** raw altitude ≥ 5 m below the lift peak for two samples. There is deliberately
+  no time-based backstop. Getting off and walking horizontally to another lift with no
+  descent merges the two rides into one; this was accepted as an infrequent case.
+- **Minimum counted lift:** 10 m, adjustable 5–50 m. A ride that ends below the minimum
+  is discarded.
+- Vibration: optional, default on. Two short pulses at lift start and two at lift end.
+  A single pulse is avoided because it looks like a phone notification.
 - **Undo last lift** in the More menu; the phone receives a correction.
 
 ## Screens and input
@@ -89,12 +92,11 @@ Centred vertical stack, no decoration, same layout on both screens:
 - **Today** — vertical, runs, first/last lift, average per run, longest run, lift list.
 - **Season** — label, days, vertical, runs, average/day, best day, trip count. Summary
   cached on the watch; refreshed from the phone when connected.
-- **Trips** — current trip summary; full list on the phone. **Open:** confirm on-watch.
 - **More** (Select from Main) — Set Base, End Day, Pause/Resume, Undo Last Lift, Units,
   Vibration, Sync Now, About. No long presses.
-- **Up/Down** cycle Main/Today/Season/Trips. **Back** exits; tracking pauses and state
+- **Up/Down** cycle Main/Today/Season. **Back** exits; tracking pauses and state
   persists.
-- No touch requirement.
+- No touch requirement. Trips are phone-only.
 
 ## Testing
 
@@ -107,9 +109,20 @@ Centred vertical stack, no decoration, same layout on both screens:
 - Field test: one gondola in town, plus at least one real ski-day GPS trace to replay.
 - Unit tests before UI.
 
+## Implementation status
+
+- [x] Alloy project scaffolded for emery + gabbro
+- [x] Pure `LiftDetector` with 17 headless tests
+- [ ] Day store and persistence
+- [ ] Sync protocol and PKJS store
+- [ ] Piu screens and More menu
+- [ ] Config-page dashboard
+- [ ] Debug screen and sample logging
+- [ ] Field testing
+
 ## Open questions
 
-- Confirm config-page dashboard only being reachable while the watch app is running.
-- Exact status icons.
-- Whether Trips is an on-watch screen in v1.
 - Lift record wire format and message packing.
+- Whether to persist the in-progress lift across an app restart (today only completed
+  lifts survive).
+- Exact Piu metrics and icon drawing method for both screens.
