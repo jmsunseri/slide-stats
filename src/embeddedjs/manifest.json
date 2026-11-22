@@ -6,5 +6,16 @@
 	"modules": {
 		"*": "./main",
 		"core": "./lib/core.js"
+	},
+	"ffi": {
+		"sources": [
+			"./ffi.c"
+		],
+		"functions": {
+			"slide_content_size": {
+				"arguments": [],
+				"returns": "int32_t"
+			}
+		}
 	}
 }

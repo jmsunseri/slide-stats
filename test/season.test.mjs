@@ -12,8 +12,6 @@ import {
 
 const north = { seasonMode: "north" };
 const south = { seasonMode: "south" };
-const custom = { seasonMode: "custom", seasonStartMonth: 7, seasonStartDay: 1 };
-const none = { seasonMode: "none" };
 
 test("day keys round-trip as local dates", () => {
 	const date = new Date(2026, 2, 14);
@@ -38,17 +36,6 @@ test("southern season starts on 1 March", () => {
 	assert.equal(seasonKey("2026-02-28", south), "2025");
 	assert.equal(seasonKey("2026-03-01", south), "2026");
 	assert.equal(seasonKey("2026-08-01", south), "2026");
-});
-
-test("custom season uses its configured start", () => {
-	assert.equal(seasonKey("2026-06-30", custom), "2025");
-	assert.equal(seasonKey("2026-07-01", custom), "2026");
-	assert.equal(seasonLabel("2026", custom), "2026-27");
-});
-
-test("no season is one all-time bucket", () => {
-	assert.equal(seasonKey("2020-01-01", none), "all");
-	assert.equal(seasonLabel("2020-01-01", none), "All time");
 });
 
 test("Friday and Monday are one trip; Friday and Tuesday are not", () => {
@@ -112,13 +99,3 @@ test("season summary filters days and computes best day", () => {
 	assert.equal(summary.trips.length, 3);
 });
 
-test("all-time summary includes every day", () => {
-	const days = {
-		"2025-08-01": { v: 900, r: 2 },
-		"2026-03-10": { v: 1300, r: 4 },
-	};
-	const summary = summarize(days, none, new Date(2026, 2, 14));
-	assert.equal(summary.days, 2);
-	assert.equal(summary.vertical, 2200);
-	assert.equal(summary.trips.length, 2);
-});

@@ -184,28 +184,25 @@ function option(value, current) {
 		value.charAt(0).toUpperCase() + value.slice(1) + "</option>";
 }
 
-function monthOptions(current) {
-	let html = "";
-	for (let i = 1; i <= 12; i++)
-		html += '<option value="' + i + '"' + (i === current ? " selected" : "") + ">" + MONTHS[i - 1] + "</option>";
-	return html;
-}
-
-function dayOptions(current) {
-	let html = "";
-	for (let i = 1; i <= 31; i++)
-		html += '<option value="' + i + '"' + (i === current ? " selected" : "") + ">" + i + "</option>";
-	return html;
-}
-
-function settingsSection(settings, summary) {
+function settingsSection(settings) {
 	const s = settings;
-	const d = s.detection;
+	const d = s.detection || {};
+	const imperial = s.units === "imperial";
+	const gainUnit = imperial ? "ft" : "m";
+	const speedUnit = imperial ? "mph" : "km/h";
+	const gain = imperial ? Math.round((d.minLiftGainM || 10) * 3.28084) : Math.round(d.minLiftGainM || 10);
+	const descent = imperial ? Math.round((d.endDescentM || 5) * 3.28084) : Math.round(d.endDescentM || 5);
+	const speed = imperial ? Math.round((d.maxSpeedMps || 8) * 2.23694) : Math.round((d.maxSpeedMps || 8) * 3.6);
+	const gainMin = imperial ? 16 : 5;
+	const gainMax = imperial ? 164 : 50;
+	const descentMin = imperial ? 10 : 3;
+	const descentMax = imperial ? 66 : 20;
+	const speedMax = imperial ? 34 : 54;
 	const json = JSON.stringify(settings).replace(/</g, "\\u003c");
-	return '<section class="panel" data-panel="settings">' +
-		'<h2>Units</h2><div class="field"><label for="units">Distance</label>' +
-		'<select id="units"><option value="metric"' + (s.units !== "imperial" ? " selected" : "") + '>Metric (m)</option>' +
-		'<option value="imperial"' + (s.units === "imperial" ? " selected" : "") + '>Imperial (ft)</option></select></div>' +
+	return '<section class="panel" data-panel="settings" data-units="' + (imperial ? "imperial" : "metric") + '">' +
+		'<h2>Units</h2><div class="field"><label for="units">Distance and speed</label>' +
+		'<select id="units"><option value="metric"' + (s.units !== "imperial" ? " selected" : "") + '>Metric (m, km/h)</option>' +
+		'<option value="imperial"' + (s.units === "imperial" ? " selected" : "") + '>Imperial (ft, mph)</option></select></div>' +
 		'<h2>Behaviour</h2>' +
 		'<div class="field switch"><label for="vibration">Vibrate on lift start and end</label>' +
 		'<input type="checkbox" id="vibration"' + (s.vibration ? " checked" : "") + '></div>' +
@@ -213,28 +210,22 @@ function settingsSection(settings, summary) {
 		'<input type="checkbox" id="trips"' + (s.trips !== false ? " checked" : "") + '></div>' +
 		'<h2>Season</h2><div class="field"><label for="seasonMode">Hemisphere</label>' +
 		'<select id="seasonMode">' +
-		'<option value="north"' + (s.seasonMode === "north" ? " selected" : "") + '>Northern (Sep–Aug)</option>' +
+		'<option value="north"' + (s.seasonMode !== "south" ? " selected" : "") + '>Northern (Sep–Aug)</option>' +
 		'<option value="south"' + (s.seasonMode === "south" ? " selected" : "") + '>Southern (Mar–Feb)</option>' +
-		'<option value="custom"' + (s.seasonMode === "custom" ? " selected" : "") + '>Custom start</option>' +
-		'<option value="none"' + (s.seasonMode === "none" ? " selected" : "") + '>No seasons (all time)</option>' +
 		"</select></div>" +
-		'<div class="field-row"><div class="field"><label for="seasonStartMonth">Custom start month</label>' +
-		'<select id="seasonStartMonth">' + monthOptions(s.seasonStartMonth || 9) + "</select></div>" +
-		'<div class="field"><label for="seasonStartDay">Day</label>' +
-		'<select id="seasonStartDay">' + dayOptions(s.seasonStartDay || 1) + "</select></div></div>" +
 		'<h2>Lift detection</h2>' +
 		'<div class="field"><label for="sampleIntervalMs">Altitude processing interval (seconds)</label>' +
 		'<input type="number" id="sampleIntervalMs" min="5" max="60" step="1" value="' + Math.round((s.sampleIntervalMs || 10000) / 1000) + '"></div>' +
-		'<div class="field-row"><div class="field"><label for="minLiftGainM">Minimum lift gain (m)</label>' +
-		'<input type="number" id="minLiftGainM" min="5" max="50" step="1" value="' + (d.minLiftGainM || 10) + '"></div>' +
-		'<div class="field"><label for="endDescentM">Descent that ends a lift (m)</label>' +
-		'<input type="number" id="endDescentM" min="3" max="20" step="1" value="' + (d.endDescentM || 5) + '"></div></div>' +
+		'<div class="field-row"><div class="field"><label for="minLiftGainM">Minimum lift gain (<span id="gain-unit">' + gainUnit + '</span>)</label>' +
+		'<input type="number" id="minLiftGainM" min="' + gainMin + '" max="' + gainMax + '" step="1" value="' + gain + '"></div>' +
+		'<div class="field"><label for="endDescentM">Descent that ends a lift (<span id="descent-unit">' + gainUnit + '</span>)</label>' +
+		'<input type="number" id="endDescentM" min="' + descentMin + '" max="' + descentMax + '" step="1" value="' + descent + '"></div></div>' +
 		'<div class="field-row"><div class="field"><label for="fastWindowMs">Fast window (seconds)</label>' +
 		'<input type="number" id="fastWindowMs" min="20" max="60" step="5" value="' + Math.round((d.fastWindowMs || 30000) / 1000) + '"></div>' +
 		'<div class="field"><label for="slowWindowMs">Slow window (seconds)</label>' +
 		'<input type="number" id="slowWindowMs" min="60" max="180" step="10" value="' + Math.round((d.slowWindowMs || 90000) / 1000) + '"></div></div>' +
-		'<div class="field"><label for="maxSpeedMps">Maximum speed (m/s)</label>' +
-		'<input type="number" id="maxSpeedMps" min="0" max="15" step="1" value="' + (d.maxSpeedMps || 8) + '"></div>' +
+		'<div class="field"><label for="maxSpeedMps">Maximum speed (<span id="speed-unit">' + speedUnit + '</span>)</label>' +
+		'<input type="number" id="maxSpeedMps" min="0" max="' + speedMax + '" step="1" value="' + speed + '"></div>' +
 		'<p class="hint">The minimum gain is also the detection threshold. Changing these affects future lifts, not past ones. The GPS stream stays open for the session; this interval controls how often the watch evaluates it.</p>' +
 		'<button id="save">Save settings</button>' +
 		'<p class="hint">Stats are stored on this phone. Open Slide Stats on the watch before syncing.</p>' +
@@ -311,7 +302,7 @@ footer{text-align:center;color:var(--muted);font-size:12px;padding:22px 10px}
 ${todaySection(summary, units)}
 ${showTrips ? tripsSection(summary, units) : ""}
 ${seasonSection(summary, units)}
-${settingsSection(settings, summary)}
+${settingsSection(settings)}
 <footer>Data stays on your watch and this phone.</footer>
 </main>
 <script>
@@ -325,21 +316,44 @@ ${settingsSection(settings, summary)}
       for (var k = 0; k < panels.length; k++) panels[k].classList.toggle("active", panels[k].getAttribute("data-panel") === name);
     });
   }
+  var units = document.getElementById("units");
+  units.addEventListener("change", function(){
+    var panel = document.querySelector('[data-panel="settings"]');
+    var from = panel.getAttribute("data-units");
+    var to = this.value;
+    if (from === to) return;
+    var gain = document.getElementById("minLiftGainM");
+    var descent = document.getElementById("endDescentM");
+    var speed = document.getElementById("maxSpeedMps");
+    function distance(value) { return from === "imperial" ? value / 3.28084 : value * 3.28084; }
+    function velocity(value) { return from === "imperial" ? value * 1.60934 : value / 1.60934; }
+    gain.value = Math.round(distance(Number(gain.value)));
+    descent.value = Math.round(distance(Number(descent.value)));
+    speed.value = Math.round(velocity(Number(speed.value)));
+    panel.setAttribute("data-units", to);
+    document.getElementById("gain-unit").textContent = to === "imperial" ? "ft" : "m";
+    document.getElementById("descent-unit").textContent = to === "imperial" ? "ft" : "m";
+    document.getElementById("speed-unit").textContent = to === "imperial" ? "mph" : "km/h";
+  });
   document.getElementById("save").addEventListener("click", function(){
     var s = JSON.parse(document.getElementById("settings-data").textContent);
-    s.units = document.getElementById("units").value;
+    var imperial = units.value === "imperial";
+    var gain = Number(document.getElementById("minLiftGainM").value);
+    var descent = Number(document.getElementById("endDescentM").value);
+    var speed = Number(document.getElementById("maxSpeedMps").value);
+    s.units = units.value;
     s.vibration = document.getElementById("vibration").checked;
     s.trips = document.getElementById("trips").checked;
     s.seasonMode = document.getElementById("seasonMode").value;
-    s.seasonStartMonth = Number(document.getElementById("seasonStartMonth").value);
-    s.seasonStartDay = Number(document.getElementById("seasonStartDay").value);
+    delete s.seasonStartMonth;
+    delete s.seasonStartDay;
     s.sampleIntervalMs = Number(document.getElementById("sampleIntervalMs").value) * 1000;
     s.detection = s.detection || {};
-    s.detection.minLiftGainM = Number(document.getElementById("minLiftGainM").value);
-    s.detection.endDescentM = Number(document.getElementById("endDescentM").value);
+    s.detection.minLiftGainM = imperial ? Math.round(gain / 3.28084) : Math.round(gain);
+    s.detection.endDescentM = imperial ? Math.round(descent / 3.28084) : Math.round(descent);
     s.detection.fastWindowMs = Number(document.getElementById("fastWindowMs").value) * 1000;
     s.detection.slowWindowMs = Number(document.getElementById("slowWindowMs").value) * 1000;
-    s.detection.maxSpeedMps = Number(document.getElementById("maxSpeedMps").value);
+    s.detection.maxSpeedMps = imperial ? Math.round(speed / 2.23694) : Math.round(speed / 3.6);
     location.href = "pebblejs://close#" + encodeURIComponent(JSON.stringify(s));
   });
 })();

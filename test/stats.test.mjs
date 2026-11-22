@@ -9,8 +9,6 @@ const stats = require("../src/pkjs/lib/stats.js");
 const SETTINGS = {
 	units: "metric",
 	seasonMode: "north",
-	seasonStartMonth: 9,
-	seasonStartDay: 1,
 	trips: true,
 	detection: {},
 };
@@ -80,8 +78,6 @@ test("season keys match the watch for northern, southern, custom, and none", () 
 	const settingsList = [
 		{ seasonMode: "north" },
 		{ seasonMode: "south" },
-		{ seasonMode: "custom", seasonStartMonth: 7, seasonStartDay: 1 },
-		{ seasonMode: "none" },
 	];
 	const dates = ["2025-08-31", "2025-09-01", "2026-02-28", "2026-03-01", "2026-06-30", "2026-07-01"];
 	for (const settings of settingsList) {
@@ -89,12 +85,6 @@ test("season keys match the watch for northern, southern, custom, and none", () 
 			assert.equal(stats.seasonKey(date, settings), Core.seasonKey(date, settings),
 				JSON.stringify(settings) + " " + date);
 	}
-});
-
-test("custom season start clamps impossible days", () => {
-	const settings = { seasonMode: "custom", seasonStartMonth: 2, seasonStartDay: 31 };
-	const summary = stats.summarize({}, settings, new Date(2026, 2, 14));
-	assert.equal(summary.season.label, "2026-27");
 });
 
 test("a day with no lifts does not appear in the season", () => {

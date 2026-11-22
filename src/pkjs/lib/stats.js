@@ -29,21 +29,10 @@ function dayNumber(key) {
 }
 
 function seasonStart(settings) {
-	const mode = settings.seasonMode || "north";
-	if (mode === "south")
-		return { month: 3, day: 1 };
-	if (mode === "custom") {
-		const month = settings.seasonStartMonth || 9;
-		const lastDay = month === 2 ? 28 : new Date(2000, month, 0).getDate();
-		return { month, day: Math.min(settings.seasonStartDay || 1, lastDay) };
-	}
-	return { month: 9, day: 1 };
+	return (settings.seasonMode || "north") === "south" ? { month: 3, day: 1 } : { month: 9, day: 1 };
 }
 
 function seasonKey(key, settings) {
-	const mode = settings.seasonMode || "north";
-	if (mode === "none")
-		return "all";
 	const date = parseKey(key);
 	const start = seasonStart(settings);
 	const thisYear = new Date(date.getFullYear(), start.month - 1, start.day);

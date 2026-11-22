@@ -7,3 +7,4 @@ node_modules/
 mc.xs.c
 mc.xs.h
 mc.xsi
+src/c/mc.ffi.c

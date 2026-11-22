@@ -13,6 +13,7 @@ int main(void) {
 #ifdef PBL_DEBUG
     .flags = kModdableCreationFlagDebug,
 #endif
+    .fxBuildFFI = fxBuildFFI,
   };
   moddable_createMachine(&cr);
 

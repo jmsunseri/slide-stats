@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createDayStore, STATE_KEY, DEFAULT_SETTINGS, dayKey } from "../src/embeddedjs/lib/core.js";
+import { createDayStore, STATE_KEY, DEFAULT_SETTINGS, dayKey, createLiftDetector } from "../src/embeddedjs/lib/core.js";
 
 function memoryStorage() {
 	const map = new Map();
@@ -33,25 +33,19 @@ function lift(gain, startTime, endTime) {
 	};
 }
 
-test("a fresh store starts a day with no base", () => {
+test("a fresh store starts a day and auto-tracks", () => {
 	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
 	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
 	const today = store.getToday();
 	assert.equal(today.date, "2026-03-14");
-	assert.equal(today.base, null);
-	assert.equal(store.hasBase(), false);
-	assert.equal(store.isTracking(), false);
+	assert.equal(store.isTracking(), true);
+	assert.equal(store.todayStats().runs, 0);
 });
 
-test("setting a base and adding lifts updates today, days, and the outbox", () => {
+test("adding lifts updates today, days, and the outbox without a base", () => {
 	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
 	const storage = memoryStorage();
 	const store = createDayStore({ storage, now: clock.now }).load();
-
-	store.setBase(2143.7);
-	assert.equal(store.hasBase(), true);
-	assert.equal(store.isTracking(), true);
-	assert.equal(store.getToday().base, 2144);
 
 	store.addLift(lift(400.2, 1000, 5000));
 	store.addLift(lift(350.8, 6000, 9000));
@@ -69,7 +63,6 @@ test("setting a base and adding lifts updates today, days, and the outbox", () =
 	assert.equal(day.r, 2);
 	assert.equal(day.first, 1000);
 	assert.equal(day.last, 9000);
-	assert.equal(day.base, 2144);
 
 	const outbox = store.getOutbox();
 	assert.equal(outbox.length, 2);
@@ -83,12 +76,11 @@ test("state round-trips through storage", () => {
 	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
 	const storage = memoryStorage();
 	const first = createDayStore({ storage, now: clock.now }).load();
-	first.setBase(2100);
 	first.addLift(lift(500, 1000, 5000));
 	first.setSettings({ units: "imperial" });
 
 	const second = createDayStore({ storage, now: clock.now }).load();
-	assert.equal(second.getToday().base, 2100);
+	assert.equal(second.getToday().date, "2026-03-14");
 	assert.equal(second.todayStats().vertical, 500);
 	assert.equal(second.getSettings().units, "imperial");
 	assert.equal(second.getOutbox().length, 1);
@@ -98,7 +90,6 @@ test("state round-trips through storage", () => {
 test("undo removes the lift and queues a delete record", () => {
 	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
 	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
-	store.setBase(2100);
 	store.addLift(lift(400, 1000, 5000));
 	store.addLift(lift(300, 6000, 9000));
 
@@ -115,39 +106,37 @@ test("undo removes the lift and queues a delete record", () => {
 	assert.equal(store.getDays()["2026-03-14"], undefined);
 });
 
-test("midnight rollover can carry the base", () => {
+test("midnight rollover starts a fresh day and keeps tracking", () => {
 	const clock = fakeClock(new Date(2026, 2, 14, 23, 50).getTime());
 	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
-	store.setBase(2000);
 	store.addLift(lift(300, 1000, 5000));
 
 	clock.set(new Date(2026, 2, 15, 0, 10).getTime());
-	const result = store.ensureToday(true);
+	const result = store.ensureToday();
 	assert.equal(result.changed, true);
 	assert.equal(result.previousDate, "2026-03-14");
 	assert.equal(store.getToday().date, "2026-03-15");
-	assert.equal(store.getToday().base, 2000);
+	assert.equal(store.isTracking(), true);
 	assert.equal(store.todayStats().runs, 0);
 	assert.equal(store.getDays()["2026-03-14"].v, 300);
 });
 
-test("launching on a new day does not carry the base", () => {
+test("launching on a new day starts a fresh day", () => {
 	const clock = fakeClock(new Date(2026, 2, 14, 23, 50).getTime());
 	const storage = memoryStorage();
 	const store = createDayStore({ storage, now: clock.now }).load();
-	store.setBase(2000);
+	store.addLift(lift(300, 1000, 5000));
 
 	clock.set(new Date(2026, 2, 15, 8, 0).getTime());
 	const reopened = createDayStore({ storage, now: clock.now }).load();
 	assert.equal(reopened.getToday().date, "2026-03-15");
-	assert.equal(reopened.getToday().base, null);
-	assert.equal(reopened.hasBase(), false);
+	assert.equal(reopened.isTracking(), true);
+	assert.equal(reopened.todayStats().runs, 0);
 });
 
 test("acks drain the outbox", () => {
 	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
 	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
-	store.setBase(2100);
 	store.addLift(lift(400, 1000, 5000));
 	store.addLift(lift(300, 6000, 9000));
 
@@ -172,7 +161,6 @@ test("settings merge deeply and preserve unrelated detection values", () => {
 test("end day stops tracking and resume restores it", () => {
 	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
 	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
-	store.setBase(2100);
 	assert.equal(store.isTracking(), true);
 	store.endDay();
 	assert.equal(store.isTracking(), false);
@@ -181,10 +169,18 @@ test("end day stops tracking and resume restores it", () => {
 	assert.equal(store.isTracking(), true);
 });
 
+test("pause stops tracking independently of the day state", () => {
+	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
+	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
+	store.setPaused(true);
+	assert.equal(store.isTracking(), false);
+	store.setPaused(false);
+	assert.equal(store.isTracking(), true);
+});
+
 test("season summary sees today's stored aggregate", () => {
 	const clock = fakeClock(new Date(2026, 3, 1, 9, 0).getTime());
 	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
-	store.setBase(2100);
 	store.addLift(lift(400, 1000, 5000));
 	store.addLift(lift(350, 6000, 9000));
 
@@ -194,4 +190,32 @@ test("season summary sees today's stored aggregate", () => {
 	assert.equal(summary.vertical, 750);
 	assert.equal(summary.runs, 2);
 	assert.equal(summary.bestDay.date, dayKey(new Date(2026, 3, 1)));
+});
+
+test("a climb alone does not increment runs; an end event does", () => {
+	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
+	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
+	const detector = createLiftDetector();
+
+	const sample = (t, altitude) => ({ t, altitude, altitudeAccuracy: 5, speed: 4 });
+	const events = [];
+	for (let i = 0; i <= 6; i++)
+		events.push(...detector.addSample(sample(i * 10000, 2000 + i * 20)));
+
+	assert.ok(events.some(event => event.type === "start"), "climb should start a lift");
+	for (const event of events) {
+		if (event.type === "end")
+			store.addLift(event.lift);
+	}
+	assert.equal(store.todayStats().runs, 0, "start alone must not count a run");
+	assert.equal(store.todayStats().vertical, 0);
+
+	for (let i = 7; i <= 10; i++)
+		events.push(...detector.addSample(sample(i * 10000, 2120 - (i - 6) * 10)));
+	for (const event of events) {
+		if (event.type === "end")
+			store.addLift(event.lift);
+	}
+	assert.equal(store.todayStats().runs, 1);
+	assert.ok(store.todayStats().vertical > 0);
 });

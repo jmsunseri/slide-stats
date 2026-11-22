@@ -310,8 +310,7 @@ function createLiftDetector(options = {}) {
  * Date keys, ski seasons, and trip grouping. Pure functions, no Pebble APIs.
  *
  * A season is a 12-month window identified by its start year. The northern
- * preset starts on 1 September, the southern preset on 1 March, and custom uses
- * the configured month/day. "none" treats everything as one all-time bucket.
+ * preset starts on 1 September; the southern preset starts on 1 March.
  */
 
 const NORTH = { mode: "north", month: 9, day: 1 };
@@ -337,21 +336,10 @@ function dayNumber(key) {
 }
 
 function seasonStart(settings = {}) {
-	const mode = settings.seasonMode || "north";
-	if (mode === "south")
-		return { month: 3, day: 1 };
-	if (mode === "custom") {
-		const month = settings.seasonStartMonth || 9;
-		const lastDay = month === 2 ? 28 : new Date(2000, month, 0).getDate();
-		return { month, day: Math.min(settings.seasonStartDay || 1, lastDay) };
-	}
-	return { month: 9, day: 1 };
+	return settings.seasonMode === "south" ? { month: 3, day: 1 } : { month: 9, day: 1 };
 }
 
 function seasonStartYear(key, settings = {}) {
-	const mode = settings.seasonMode || "north";
-	if (mode === "none")
-		return null;
 	const date = dateFromKey(key);
 	const start = seasonStart(settings);
 	const thisYear = new Date(date.getFullYear(), start.month - 1, start.day);
@@ -359,8 +347,7 @@ function seasonStartYear(key, settings = {}) {
 }
 
 function seasonKey(key, settings = {}) {
-	const startYear = seasonStartYear(key, settings);
-	return startYear === null ? "all" : String(startYear);
+	return String(seasonStartYear(key, settings));
 }
 
 function seasonLabel(key) {
@@ -478,8 +465,6 @@ const DEFAULT_SETTINGS = {
 	paused: false,
 	sampleIntervalMs: 10000,
 	seasonMode: "north",
-	seasonStartMonth: 9,
-	seasonStartDay: 1,
 	trips: true,
 	detection: {
 		fastGainM: 10,
@@ -502,11 +487,9 @@ function mergeSettings(base, patch) {
 	return result;
 }
 
-function emptyDay(key, base, baseTime) {
+function emptyDay(key) {
 	return {
 		date: key,
-		base: base === undefined ? null : base,
-		baseTime: baseTime === undefined ? null : baseTime,
 		closed: false,
 		lifts: [],
 	};
@@ -559,34 +542,20 @@ function createDayStore(options = {}) {
 			nextSeq = stored.nextSeq || 1;
 		}
 
-		ensureToday(false);
+		ensureToday();
 		return self;
 	}
 
-	function ensureToday(carryBase, timestamp) {
+	function ensureToday(timestamp) {
 		const at = timestamp === undefined ? now() : timestamp;
 		const key = dayKey(new Date(at));
 		if (today && today.date === key)
 			return { changed: false, previousDate: null };
 
 		const previous = today;
-		const carry = carryBase && previous && previous.base !== null;
-		today = emptyDay(
-			key,
-			carry ? previous.base : null,
-			carry ? previous.baseTime : null
-		);
+		today = emptyDay(key);
 		save();
 		return { changed: true, previousDate: previous ? previous.date : null };
-	}
-
-	function setBase(altitude, timestamp) {
-		ensureToday(false, timestamp);
-		today.base = Math.round(altitude);
-		today.baseTime = timestamp === undefined ? now() : timestamp;
-		today.closed = false;
-		save();
-		return today.base;
 	}
 
 	function aggregate(key) {
@@ -596,14 +565,13 @@ function createDayStore(options = {}) {
 				r: 0,
 				first: null,
 				last: null,
-				base: today.base,
 			};
 		}
 		return days[key];
 	}
 
 	function addLift(lift) {
-		ensureToday(false);
+		ensureToday();
 		const key = today.date;
 		const seq = nextSeq++;
 		const stored = {
@@ -623,7 +591,6 @@ function createDayStore(options = {}) {
 		day.r += 1;
 		day.first = day.first === null ? stored.startTime : Math.min(day.first, stored.startTime);
 		day.last = day.last === null ? stored.endTime : Math.max(day.last, stored.endTime);
-		day.base = today.base;
 
 		outbox.push(Object.assign({
 			id: key + ":" + seq,
@@ -637,7 +604,7 @@ function createDayStore(options = {}) {
 	}
 
 	function undoLastLift() {
-		ensureToday(false);
+		ensureToday();
 		const key = today.date;
 		const lift = today.lifts.pop();
 		if (!lift)
@@ -673,13 +640,13 @@ function createDayStore(options = {}) {
 	}
 
 	function endDay() {
-		ensureToday(false);
+		ensureToday();
 		today.closed = true;
 		save();
 	}
 
 	function resumeDay() {
-		ensureToday(false);
+		ensureToday();
 		today.closed = false;
 		save();
 	}
@@ -701,12 +668,8 @@ function createDayStore(options = {}) {
 			save();
 	}
 
-	function hasBase() {
-		return !!(today && today.base !== null);
-	}
-
 	function isTracking() {
-		return hasBase() && !today.closed && !settings.paused;
+		return !!today && !today.closed && !settings.paused;
 	}
 
 	function todayStats() {
@@ -740,7 +703,6 @@ function createDayStore(options = {}) {
 		load,
 		save,
 		ensureToday,
-		setBase,
 		addLift,
 		undoLastLift,
 		endDay,
@@ -748,7 +710,6 @@ function createDayStore(options = {}) {
 		setSettings,
 		setPaused,
 		ack,
-		hasBase,
 		isTracking,
 		todayStats,
 		seasonSummary,

@@ -9,6 +9,16 @@ import * as Core from "core";
 const VERSION = "0.1.0";
 const DEBUG = true;
 
+// The system Text Size preference. The FFI shim returns 0..3; default to Large.
+let contentSize = 2;
+try {
+	if (typeof Natives !== "undefined" && Natives.slide_content_size)
+		contentSize = Natives.slide_content_size();
+}
+catch (error) {
+	console.log("slide-stats: content size unavailable: " + error);
+}
+
 const storage = {
 	getItem: key => localStorage.getItem(key),
 	setItem: (key, value) => localStorage.setItem(key, value),
@@ -22,16 +32,13 @@ let message = null;
 let messageReady = false;
 let sendingLift = false;
 let ackTimer = null;
-let onLift = false;
 let statusNoGps = false;
-let lastAltitude = null;
-let recentAltitudes = [];
 let lastProcessed = 0;
-let lastPromptAltitude = null;
 let mockTimer = null;
 
 let menuOpen = false;
 let menuIndex = 0;
+let menuScroll = 0;
 let currentScreen = "main";
 
 /* ------------------------------------------------------------------ */
@@ -42,28 +49,70 @@ const render = new Poco(screen);
 const white = render.makeColor(255, 255, 255);
 const black = render.makeColor(0, 0, 0);
 
-const fontTime = new render.Font("Bitham-Bold", 42);
-const fontAltitude = new render.Font("Gothic-Bold", 28);
-const fontStats = new render.Font("Gothic-Regular", 18);
-const fontStatus = new render.Font("Gothic-Regular", 14);
-const fontTitle = new render.Font("Gothic-Bold", 18);
-const fontRow = new render.Font("Gothic-Regular", 18);
-const fontRowBold = new render.Font("Gothic-Bold", 18);
-const fontMenu = new render.Font("Gothic-Regular", 14);
-
 const W = render.width;
 const H = render.height;
 const ROUND = screen.round;
 const MARGIN = ROUND ? 40 : 6;
+const MENU_MARGIN = ROUND ? 55 : 0;
 
-function drawCentered(text, font, y) {
-	const width = render.getTextWidth(text, font);
-	render.drawText(text, font, black, (W - width) >> 1, y);
+const fontTime = new render.Font("Roboto-Bold", 49);
+const fontSuffix = new render.Font("Gothic-Bold", 18);
+const fontStats = new render.Font("Gothic-Bold", 24);
+const fontStatsSmall = new render.Font("Gothic-Bold", 18);
+
+const menuSize = contentSize === 0 ? 14 : (contentSize >= 3 && !ROUND ? 24 : 18);
+const fontMenu = new render.Font("Gothic-Regular", menuSize);
+const fontMenuHeader = new render.Font("Gothic-Bold", menuSize);
+const detailSize = contentSize === 0 ? 14 : 18;
+const fontTitle = new render.Font("Gothic-Bold", detailSize);
+const fontRow = new render.Font("Gothic-Regular", detailSize);
+const fontRowBold = new render.Font("Gothic-Bold", detailSize);
+
+function centeredX(text, font) {
+	return (W - render.getTextWidth(text, font)) >> 1;
+}
+
+function drawCentered(text, font, y, color) {
+	render.drawText(text, font, color === undefined ? black : color, centeredX(text, font), y);
 }
 
 function drawRight(text, font, right, y) {
-	const width = render.getTextWidth(text, font);
-	render.drawText(text, font, black, right - width, y);
+	render.drawText(text, font, black, right - render.getTextWidth(text, font), y);
+}
+
+function drawPause(x, y) {
+	render.fillRectangle(black, x, y, 4, 14);
+	render.fillRectangle(black, x + 8, y, 4, 14);
+}
+
+function drawNoGps(x, y) {
+	const cx = x + 8;
+	const cy = y + 8;
+	for (let angle = 0; angle < 6.283; angle += 0.2)
+		render.drawPixel(black, Math.round(cx + Math.cos(angle) * 7), Math.round(cy + Math.sin(angle) * 7));
+	for (let i = -5; i <= 5; i++) {
+		render.drawPixel(black, cx + i, cy + i);
+		render.drawPixel(black, cx + i + 1, cy + i);
+	}
+}
+
+function drawStatusIcons() {
+	if (!settings.paused && !statusNoGps)
+		return;
+	const y = H - (ROUND ? 42 : 32);
+	const items = [];
+	if (settings.paused)
+		items.push("pause");
+	if (statusNoGps)
+		items.push("gps");
+	let x = (W - (items.length === 1 ? 16 : 36)) >> 1;
+	for (const item of items) {
+		if (item === "pause")
+			drawPause(x, y);
+		else
+			drawNoGps(x, y);
+		x += 19;
+	}
 }
 
 function isDayClosed() {
@@ -71,41 +120,33 @@ function isDayClosed() {
 	return !!(today && today.closed);
 }
 
-function statusText() {
-	if (settings.paused)
-		return "PAUSED";
-	if (isDayClosed())
-		return "DAY ENDED";
-	if (statusNoGps || (store.hasBase() && lastAltitude === null))
-		return "NO GPS";
-	if (onLift)
-		return "LIFT";
-	return "";
-}
-
 function drawMain() {
-	const stats = store.todayStats();
-	drawCentered(Core.formatTime(new Date(), watch.hour12), fontTime, ROUND ? 30 : 14);
+	const clock = Core.formatClock(new Date(), watch.hour12);
+	const digitWidth = render.getTextWidth(clock.text, fontTime);
+	const suffixWidth = clock.suffix ? render.getTextWidth(clock.suffix, fontSuffix) : 0;
+	const gap = clock.suffix ? 4 : 0;
+	const totalWidth = digitWidth + gap + suffixWidth;
+	const x = (W - totalWidth) >> 1;
+	const y = (H - fontTime.height) >> 1;
 
-	let altitude;
-	let statsText;
-	if (store.hasBase()) {
-		altitude = Core.formatAltitude(lastAltitude, settings.units);
-		const runs = stats.runs + (stats.runs === 1 ? " RUN  " : " RUNS  ");
-		statsText = runs + Core.formatVertical(stats.vertical, settings.units);
+	render.drawText(clock.text, fontTime, black, x, y);
+	if (clock.suffix) {
+		const baseline = y + fontTime.ascent;
+		render.drawText(clock.suffix, fontSuffix, black, x + digitWidth + gap,
+			baseline - fontSuffix.ascent);
 	}
-	else {
-		altitude = "SET BASE";
-		statsText = lastAltitude === null
-			? "WAITING FOR GPS"
-			: Core.formatAltitude(lastAltitude, settings.units) + "  SELECT";
-	}
-	drawCentered(altitude, fontAltitude, ROUND ? 88 : 70);
-	drawCentered(statsText, fontStats, ROUND ? 126 : 108);
-	drawCentered(statusText(), fontStatus, ROUND ? 156 : 138);
+
+	const stats = store.todayStats();
+	const statsText = stats.runs + (stats.runs === 1 ? " RUN  " : " RUNS  ") +
+		Core.formatVertical(stats.vertical, settings.units);
+	let statsFont = fontStats;
+	if (render.getTextWidth(statsText, statsFont) > W - 12)
+		statsFont = fontStatsSmall;
+	drawCentered(statsText, statsFont, y + fontTime.height + 8);
+	drawStatusIcons();
 }
 
-function detailRows() {
+function detailData() {
 	const stats = store.todayStats();
 	const units = settings.units;
 	if (currentScreen === "today") {
@@ -134,27 +175,69 @@ function detailRows() {
 		["Platform", ROUND ? "Gabbro" : "Emery"],
 		["Units", units === "metric" ? "Metric" : "Imperial"],
 		["Data", "Watch + phone"],
-		["Stats", "Pebble app > Settings"],
+		["Stats", "Phone settings"],
 		["Tracking", store.isTracking() ? "On" : "Off"],
 	]];
 }
 
 function drawDetail() {
-	const detail = detailRows();
-	drawCentered(detail[0], fontTitle, ROUND ? 36 : 12);
-	const rows = detail[1];
-	const top = ROUND ? 66 : 40;
-	for (let i = 0; i < rows.length; i++) {
-		const y = top + i * 24;
-		render.drawText(rows[i][0], fontRow, black, MARGIN, y);
-		drawRight(rows[i][1], fontRowBold, W - MARGIN, y);
+	const data = detailData();
+	const titleY = ROUND ? 34 : 12;
+	drawCentered(data[0], fontTitle, titleY);
+	const top = titleY + fontTitle.height + 10;
+	const rowHeight = fontRow.height + 8;
+	for (let i = 0; i < data[1].length; i++) {
+		const y = top + i * rowHeight;
+		render.drawText(data[1][i][0], fontRow, black, MARGIN, y);
+		drawRight(data[1][i][1], fontRowBold, W - MARGIN, y);
+	}
+}
+
+function drawChevron(cx, cy, up, color) {
+	const fill = color === undefined ? black : color;
+	for (let i = 0; i < 5; i++) {
+		const half = up ? i : 4 - i;
+		render.fillRectangle(fill, cx - half, cy + i, half * 2 + 1, 1);
 	}
 }
 
 function drawMenu() {
-	const top = ROUND ? 32 : 12;
-	for (let i = 0; i < MENU.length; i++)
-		drawCentered((i === menuIndex ? "> " : "  ") + MENU[i].label(), fontMenu, top + i * 18);
+	const headerHeight = fontMenuHeader.height + 10;
+	const top = ROUND ? 26 : 0;
+	const left = MENU_MARGIN;
+	const width = W - left * 2;
+
+	render.fillRectangle(black, left, top, width, headerHeight);
+	drawCentered("MORE", fontMenuHeader, top + 5, white);
+
+	const rowHeight = fontMenu.height + 10;
+	const listTop = top + headerHeight + 4;
+	const listBottom = H - 14;
+	let visible = Math.floor((listBottom - listTop) / rowHeight);
+	if (visible < 3)
+		visible = 3;
+
+	if (menuIndex < menuScroll)
+		menuScroll = menuIndex;
+	else if (menuIndex >= menuScroll + visible)
+		menuScroll = menuIndex - visible + 1;
+
+	for (let i = 0; i < visible && menuScroll + i < MENU.length; i++) {
+		const index = menuScroll + i;
+		const y = listTop + i * rowHeight;
+		if (index === menuIndex) {
+			render.fillRectangle(black, left, y - 2, width, rowHeight - 2);
+			render.drawText(MENU[index].label(), fontMenu, white, left + 10, y);
+		}
+		else {
+			render.drawText(MENU[index].label(), fontMenu, black, left + 10, y);
+		}
+	}
+
+	if (menuScroll > 0)
+		drawChevron(W - MENU_MARGIN - 14, top + 10, true, white);
+	if (menuScroll + visible < MENU.length)
+		drawChevron(W >> 1, H - 9, false);
 }
 
 function draw() {
@@ -174,7 +257,6 @@ function draw() {
 /* ------------------------------------------------------------------ */
 
 const MENU = [
-	{ id: "base", label: () => "Set Base" },
 	{ id: "day", label: () => (isDayClosed() ? "Resume Day" : "End Day") },
 	{ id: "pause", label: () => (settings.paused ? "Resume" : "Pause") },
 	{ id: "undo", label: () => "Undo Last Lift" },
@@ -204,6 +286,7 @@ function showScreen(name) {
 function openMenu() {
 	menuOpen = true;
 	menuIndex = 0;
+	menuScroll = 0;
 	draw();
 }
 
@@ -212,21 +295,9 @@ function closeMenu() {
 	draw();
 }
 
-function updateMenu() {
-	draw();
-}
-
 /* ------------------------------------------------------------------ */
 /* GPS and detection                                                   */
 /* ------------------------------------------------------------------ */
-
-function smoothedAltitude(value) {
-	recentAltitudes.push(value);
-	if (recentAltitudes.length > 5)
-		recentAltitudes.shift();
-	const sorted = recentAltitudes.slice().sort((a, b) => a - b);
-	return sorted[sorted.length >> 1];
-}
 
 function startGps() {
 	if (location)
@@ -265,25 +336,20 @@ function stopGps() {
 
 function handleSample(sample) {
 	const altitude = sample.altitude;
-	const wasNoGps = statusNoGps;
-	if (typeof altitude === "number" && isFinite(altitude)) {
-		lastAltitude = smoothedAltitude(altitude);
-		statusNoGps = false;
-	}
-	else {
-		statusNoGps = true;
-	}
-
-	if (!store.hasBase() || settings.paused || isDayClosed()) {
-		if (statusNoGps !== wasNoGps)
-			draw();
-		else if (!store.hasBase() && lastAltitude !== null &&
-			(lastPromptAltitude === null || Math.abs(lastAltitude - lastPromptAltitude) >= 5)) {
-			lastPromptAltitude = lastAltitude;
+	if (typeof altitude !== "number" || !isFinite(altitude)) {
+		if (!statusNoGps) {
+			statusNoGps = true;
 			draw();
 		}
 		return;
 	}
+	if (statusNoGps) {
+		statusNoGps = false;
+		draw();
+	}
+
+	if (settings.paused || isDayClosed())
+		return;
 
 	const now = Date.now();
 	const interval = settings.sampleIntervalMs || 10000;
@@ -291,35 +357,27 @@ function handleSample(sample) {
 		return;
 	lastProcessed = now;
 
-	const events = detector.addSample({
+	handleEvents(detector.addSample({
 		t: now,
 		altitude,
 		altitudeAccuracy: sample.altitudeAccuracy,
 		speed: sample.speed,
-	});
-	handleEvents(events);
+	}));
 }
 
 function handleEvents(events) {
 	for (const event of events) {
 		if (event.type === "start") {
-			onLift = true;
 			console.log("slide-stats: lift start");
 			vibrate();
-			draw();
 		}
 		else if (event.type === "end") {
-			onLift = false;
 			store.addLift(event.lift);
 			console.log("slide-stats: lift end " + Math.round(event.lift.gain) + " m");
 			vibrate();
 			lastProcessed = 0;
 			updateAll();
 			flushOutbox();
-		}
-		else if (event.type === "discard") {
-			onLift = false;
-			draw();
 		}
 	}
 }
@@ -425,9 +483,9 @@ function applySettings(json) {
 		store.setSettings(next);
 		settings = store.getSettings();
 		detector.setOptions(settings.detection);
-		if (settings.paused)
+		if (settings.paused || isDayClosed())
 			stopGps();
-		else if (!isDayClosed())
+		else
 			startGps();
 		updateAll();
 	}
@@ -440,25 +498,6 @@ function applySettings(json) {
 /* Actions                                                             */
 /* ------------------------------------------------------------------ */
 
-function setBase() {
-	if (lastAltitude === null || !isFinite(lastAltitude)) {
-		statusNoGps = true;
-		draw();
-		return;
-	}
-	store.setBase(lastAltitude);
-	store.setPaused(false);
-	settings = store.getSettings();
-	sendSettings();
-	detector.reset();
-	onLift = false;
-	lastProcessed = 0;
-	lastPromptAltitude = null;
-	if (!location)
-		startGps();
-	updateAll();
-}
-
 function togglePause() {
 	const paused = !store.getSettings().paused;
 	store.setPaused(paused);
@@ -466,7 +505,6 @@ function togglePause() {
 	sendSettings();
 	if (paused) {
 		detector.reset();
-		onLift = false;
 		stopGps();
 	}
 	else {
@@ -485,7 +523,6 @@ function toggleDay() {
 	else {
 		store.endDay();
 		detector.reset();
-		onLift = false;
 		stopGps();
 	}
 	updateAll();
@@ -514,22 +551,20 @@ function toggleVibration() {
 }
 
 function startMockLift() {
-	if (!store.hasBase())
-		store.setBase(2000);
+	if (isDayClosed())
+		store.resumeDay();
+	store.setPaused(false);
 	settings = store.getSettings();
 	detector.reset();
-	onLift = false;
+	statusNoGps = false;
 	let altitude = 2000;
 	let direction = 1;
 	let timestamp = Date.now();
-	statusNoGps = false;
-	lastAltitude = altitude;
 	if (mockTimer)
 		clearInterval(mockTimer);
 	mockTimer = setInterval(() => {
 		timestamp += 1000;
 		altitude += direction * 10;
-		lastAltitude = altitude;
 		if (altitude >= 2100)
 			direction = -1;
 		if (direction < 0 && altitude <= 2000) {
@@ -543,7 +578,9 @@ function startMockLift() {
 			speed: 4,
 		}));
 	}, 1000);
-	draw();
+	if (!location)
+		startGps();
+	updateAll();
 }
 
 function activateMenu() {
@@ -551,10 +588,6 @@ function activateMenu() {
 	if (!item)
 		return;
 	switch (item.id) {
-		case "base":
-			setBase();
-			closeMenu();
-			break;
 		case "day":
 			toggleDay();
 			closeMenu();
@@ -627,11 +660,11 @@ new Button({
 		if (menuOpen) {
 			if (type === "up") {
 				menuIndex = (menuIndex + MENU.length - 1) % MENU.length;
-				updateMenu();
+				draw();
 			}
 			else if (type === "down") {
 				menuIndex = (menuIndex + 1) % MENU.length;
-				updateMenu();
+				draw();
 			}
 			else if (type === "select")
 				activateMenu();
@@ -640,18 +673,12 @@ new Button({
 			return;
 		}
 
-		if (type === "up") {
+		if (type === "up")
 			cycleScreen(-1);
-		}
-		else if (type === "down") {
+		else if (type === "down")
 			cycleScreen(1);
-		}
-		else if (type === "select") {
-			if (currentScreen === "main" && !store.hasBase() && lastAltitude !== null)
-				setBase();
-			else
-				openMenu();
-		}
+		else if (type === "select")
+			openMenu();
 		else if (type === "back") {
 			if (currentScreen !== "main")
 				showScreen("main");
@@ -667,10 +694,9 @@ watch.addEventListener("minutechange", () => {
 });
 
 watch.addEventListener("daychange", () => {
-	const result = store.ensureToday(true);
+	const result = store.ensureToday();
 	if (result.changed) {
 		detector.reset();
-		onLift = false;
 		lastProcessed = 0;
 		updateAll();
 	}

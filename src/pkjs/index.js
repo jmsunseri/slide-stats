@@ -18,8 +18,6 @@ const DEFAULT_SETTINGS = {
 	paused: false,
 	sampleIntervalMs: 10000,
 	seasonMode: "north",
-	seasonStartMonth: 9,
-	seasonStartDay: 1,
 	trips: true,
 	detection: {
 		fastGainM: 10,

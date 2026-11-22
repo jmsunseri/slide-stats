@@ -29,13 +29,14 @@ still needs a decision.
 
 - **Vertical** is the sum of confirmed lift gains (ascent), not measured descent.
 - A **run** is one completed lift ride. Carved turns are not counted.
-- **Altitude display** is absolute GPS altitude. The base tap is a zero reference for
-  gain math, not a calibration of absolute altitude.
-- **Units:** metric by default, manual setting.
+- **No base altitude and no current-altitude display.** Detection uses absolute altitude
+  deltas, so a base value is not needed. The day starts when the app opens.
+- **Units:** metric by default, manual setting. Detection thresholds are stored in metric
+  and converted live in the settings page (m/ft, km/h/mph).
 - **Day boundary:** local midnight. No 04:00 boundary. A 48-hour event rolls into a new
-  day at midnight and continues with the same base.
-- **Season:** a 12-month window starting on a fixed month/day, labelled by its start year.
-  Northern = Sep 1, Southern = Mar 1, plus Custom and None. Northern default.
+  day at midnight and keeps tracking.
+- **Season:** a 12-month window starting on a fixed month/day. Northern = Sep 1, Southern =
+  Mar 1. Northern default. Changing hemisphere re-buckets all stored days automatically.
 - **Trips:** ride days separated by ≤ 2 intervening rest days group into one trip. On by
   default, can be hidden. Trips are shown on the phone only.
 - **Sync:** watch owns today, phone owns history. Lift records sync after each completed
@@ -44,27 +45,35 @@ still needs a decision.
   v1. Stats: vertical, runs, first/last lift, average per run, longest run, days, best
   day, trip counts, averages per day, daily bar chart.
 - **Settings split:** quick items on the watch (pause, end day, undo last lift, units,
-  vibration, sync now); season setup, altitude processing interval, detection thresholds, trips
-  toggle, and the dashboard on the phone.
+  vibration, sync now); hemisphere, altitude processing interval, detection thresholds,
+  trips toggle, and the dashboard on the phone.
 
 ## Main screen
 
 Centred vertical stack, no decoration, same layout on both screens:
 
 ```
-        10:42
-       2,143 m
-   3 RUNS  +1,240 m
-         LIFT
+┌──────────────────────────────┐
+│   reserved top zone          │  ~20%  (future graphic; small AM/PM if 12h)
+│                              │
+│          10:42               │  time, true vertical centre
+│                              │
+│      3 RUNS  +1,240 m        │  stats, 24 px
+│                              │
+│   reserved bottom zone       │  ~25%  (future graphic; status icons at bottom)
+└──────────────────────────────┘
 ```
 
-- Time is the largest element (Bitham Bold 42, follows `watch.hour12`).
-- Absolute GPS altitude below (Gothic Bold 28).
-- Runs and day vertical on one line (Gothic 18), updated when a lift ends.
-- No `READY` text and no always-on "tracking" dot. Exception-only status text at the
-  bottom (`LIFT`, `PAUSED`, `NO GPS`); drawn icons are a later refinement.
-- Time + altitude redraw on `minutechange`; totals only on lift end; status only on state
-  change. No animations, no forced backlight.
+- Time is the largest element: Roboto-Bold 49 digits (system font), with a small AM/PM
+  suffix to the right when the watch is set to 12-hour. The digits and suffix are
+  vertically centred as one block.
+- No current altitude and no base altitude anywhere.
+- Runs and day vertical directly below the time (Gothic-Bold 24, falling back to 18 if a
+  large imperial value would not fit).
+- Only two exception icons: pause bars when paused, crossed circle when GPS/altitude is
+  missing. No text status, no lift icon, no always-on indicator.
+- Time redraws on `minutechange`; totals on lift end; icons only on state change. The
+  detail screens do not redraw on every minute. No animations, no forced backlight.
 
 ## Lift detection
 
@@ -87,21 +96,22 @@ Centred vertical stack, no decoration, same layout on both screens:
 
 ## Screens and input
 
-- **Main** — clock, altitude, runs, day vertical, exception-only status text.
+- **Main** — clock, runs and day vertical, pause/no-GPS icons.
 - **Today** — vertical, runs, first/last lift, average per run, longest run.
 - **Season** — label, days, vertical, runs, average/day, best day. Computed on the watch
   from its stored daily aggregates; no phone round-trip needed.
-- **More** (Select from Main) — Set Base, End Day, Pause/Resume, Undo Last Lift, Units,
-  Vibration, Sync Now, About. No long presses.
-- **Up/Down** cycle Main/Today/Season. **Back** exits; tracking pauses and state
-  persists.
+- **More** (Select from any screen) — End/Resume Day, Pause/Resume, Undo Last Lift, Units,
+  Vibration, Sync Now, About. Native-style scrolling menu with a black `MORE` header,
+  inverted selection, chevrons, and fonts that follow the watch Text Size setting.
+- **Up/Down** cycle Main/Today/Season. **Back** exits; the day starts automatically when
+  the app opens, and state persists.
 - No touch requirement. Trips are phone-only.
 
 ## Testing
 
 - Detection, season/trip maths, persistence, and formatting live in one pure watch module,
   `src/embeddedjs/lib/core.js`; phone-side aggregation lives in `src/pkjs/lib/stats.js`.
-  Together they have 52 Node tests, including cross-checks that both season/trip
+  Together they have 50 Node tests, including cross-checks that both season/trip
   implementations agree.
 - Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, car climb,
   noisy GPS, missing altitude, long sample gap, day rollover.
@@ -124,17 +134,22 @@ Centred vertical stack, no decoration, same layout on both screens:
   `ready`; the watch sends changes made on the wrist.
 - The dashboard is generated by PKJS as a `data:` URL with all stats pre-rendered; the
   settings form closes with `pebblejs://close#`.
+- The menu and detail screens scale from the watch's Text Size preference. A tiny FFI shim
+  (`src/c/ffi.c`) exposes `preferred_content_size()` to JavaScript; the hero time stays
+  fixed at maximum size.
+- There is no base/started flag: the day is tracked whenever the app is open and not
+  paused or ended. End Day is explicit and survives relaunch; a new date starts fresh.
 
 ## Implementation status
 
 - [x] Alloy project scaffolded for emery + gabbro
-- [x] Watch core and phone stats with 52 Node tests
-- [x] Poco screens and More menu on both form factors
+- [x] Watch core and phone stats with 50 Node tests
+- [x] Poco screens, native-style More menu, and icon-only status
+- [x] Text Size/ContentSize FFI for the menu and detail fonts
 - [x] Sync protocol, PKJS store, and ack/dedupe
 - [x] Local dashboard with Today / Trips / Season / Settings
 - [x] Debug mock lift
 - [ ] Real-world threshold tuning
-- [ ] Drawn status icons
 - [ ] Accelerometer-gated GPS
 - [ ] Backcountry mode (issue #1)
 
