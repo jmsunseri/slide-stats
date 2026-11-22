@@ -76,7 +76,7 @@ function statusText() {
 		return "PAUSED";
 	if (isDayClosed())
 		return "DAY ENDED";
-	if (statusNoGps)
+	if (statusNoGps || (store.hasBase() && lastAltitude === null))
 		return "NO GPS";
 	if (onLift)
 		return "LIFT";
