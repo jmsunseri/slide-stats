@@ -4,16 +4,17 @@ int main(void) {
   Window *w = window_create();
   window_stack_push(w, true);
 
-#ifdef PBL_DEBUG
-  // Built with `pebble build --debug`: enable the xsbug JavaScript debugger.
+  // Piu plus the app modules need more than the default 32 kB engine pool.
   ModdableCreationRecord cr = {
     .recordSize = sizeof(cr),
+    .stack = 5120,
+    .slot = 31744,
+    .chunk = 19456,
+#ifdef PBL_DEBUG
     .flags = kModdableCreationFlagDebug,
+#endif
   };
   moddable_createMachine(&cr);
-#else
-  moddable_createMachine(NULL);
-#endif
 
   window_destroy(w);
 }
