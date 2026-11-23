@@ -69,6 +69,32 @@ test("Clay config puts every setting before the stats", () => {
 	assert.ok(colors.every(item => item.sunlight === false));
 });
 
+test("lift detection fields explain the windows and the speed gate", () => {
+	const config = buildConfig(summary(), DEFAULT_SETTINGS);
+	const info = texts(config);
+	assert.ok(info.includes("two overlapping windows"));
+	assert.ok(info.includes("fast window catches"));
+	assert.ok(info.includes("slow window catches"));
+	assert.ok(info.includes("either window"));
+	assert.ok(info.includes("maximum speed filters out samples from cars"));
+	assert.ok(info.includes("10 meters"));
+
+	for (const key of ["intervalSec", "minGainM", "endDescentM", "fastWindowSec", "slowWindowSec", "maxSpeedKmh"]) {
+		const item = byKey(config, key);
+		assert.ok(item && item.description, key + " needs a description");
+	}
+	assert.ok(byKey(config, "intervalSec").description.includes("seconds"));
+	assert.ok(byKey(config, "fastWindowSec").description.includes("seconds"));
+	assert.ok(byKey(config, "slowWindowSec").description.includes("seconds"));
+	assert.ok(byKey(config, "minGainM").description.includes("10 meters"));
+	assert.ok(byKey(config, "minGainM").label.includes("meters"));
+	assert.ok(byKey(config, "endDescentM").label.includes("meters"));
+	assert.ok(!byKey(config, "minGainM").label.includes("(m)"));
+	assert.ok(!byKey(config, "endDescentM").label.includes("(m)"));
+	assert.ok(byKey(config, "maxSpeedKmh").description.includes("ignored"));
+	assert.ok(byKey(config, "maxSpeedKmh").description.includes("driving"));
+});
+
 test("Clay stats show today and the current season", () => {
 	const config = buildConfig(summary(), DEFAULT_SETTINGS);
 	const text = texts(config);

@@ -142,7 +142,7 @@ then Select again.
 The detector, season keys, day store, and formatting live in
 `src/embeddedjs/lib/core.js`; phone-side aggregation, trip maths, and summaries are in
 `src/pkjs/lib/stats.js`.
-There are 65 tests, including the phone sync/query handlers, Clay config and settings mapping, lift-resume, and coordinate cases.
+There are 66 tests, including the phone sync/query handlers, Clay config and settings mapping, lift-resume, and coordinate cases.
 Run them with Node 22 or newer:
 
 ```sh

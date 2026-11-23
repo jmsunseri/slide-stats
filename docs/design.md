@@ -160,7 +160,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - Detection, season maths, persistence, and formatting live in one pure watch module,
   `src/embeddedjs/lib/core.js`; phone-side aggregation lives in `src/pkjs/lib/stats.js`.
   Together with the PKJS sync/query handler, Clay config/settings mapping, lift-resume,
-  and coordinate tests, they have 65 Node tests.
+  and coordinate tests, they have 66 Node tests.
 - Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, car climb,
   noisy GPS, missing altitude, long sample gap, day rollover, lift coordinates.
 - The emulator's fake GPS has no altitude, so the old debug mock was removed to keep the
@@ -215,7 +215,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 ## Implementation status
 
 - [x] Alloy project scaffolded for emery + gabbro
-- [x] Watch core and phone stats with 65 Node tests
+- [x] Watch core and phone stats with 66 Node tests
 - [x] Poco screens, native action bar, native-style More menu, and icon-only status
 - [x] Text Size/ContentSize FFI for the menu and detail fonts
 - [x] Two-peak mountain app icon (launcher + store sizes)

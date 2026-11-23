@@ -134,6 +134,10 @@ function buildConfig(summary, settings) {
 		] },
 		{ type: "text", defaultValue: "Accent colours the right-hand bar; its icons stay white, so pick a dark accent." },
 		{ type: "heading", defaultValue: "Lift detection", size: 3 },
+		{
+			type: "text",
+			defaultValue: "The watch looks for a steady climb in two overlapping windows. The fast window catches quick chairlifts and gondolas; the slow window catches slow chairs, bunny lifts, and magic carpets. A lift starts when either window sees a rise of at least 10 meters. The maximum speed filters out samples from cars and other fast travel; it does not limit your skiing.",
+		},
 		{ type: "section", items: [
 			{
 				type: "slider",
@@ -143,24 +147,27 @@ function buildConfig(summary, settings) {
 				min: 5,
 				max: 60,
 				step: 1,
+				description: "How often, in seconds, the watch checks the GPS altitude. The GPS stream stays open; shorter intervals react sooner but use more CPU.",
 			},
 			{
 				type: "slider",
 				messageKey: "minGainM",
-				label: "Minimum lift gain (m)",
+				label: "Minimum lift gain (meters)",
 				defaultValue: flat.minGainM,
 				min: 5,
 				max: 50,
 				step: 1,
+				description: "Finished climbs smaller than this are thrown away. The detector needs a rise of 10 meters to start, so values below 10 do not make it more sensitive.",
 			},
 			{
 				type: "slider",
 				messageKey: "endDescentM",
-				label: "Descent that ends a lift (m)",
+				label: "Descent that ends a lift (meters)",
 				defaultValue: flat.endDescentM,
 				min: 3,
 				max: 20,
 				step: 1,
+				description: "How far below the highest point the altitude must fall before the ride is finished. Two samples in a row are required, so a single dip does not end it.",
 			},
 			{
 				type: "slider",
@@ -170,6 +177,7 @@ function buildConfig(summary, settings) {
 				min: 20,
 				max: 60,
 				step: 5,
+				description: "A steady rise of 10 meters within this many seconds starts a fast lift. Shorten it for quicker starts; too short can catch GPS noise.",
 			},
 			{
 				type: "slider",
@@ -179,6 +187,7 @@ function buildConfig(summary, settings) {
 				min: 60,
 				max: 180,
 				step: 10,
+				description: "A steady rise of 10 meters over up to this many seconds starts a slow lift. Increase it for very slow lifts; too long can miss short rides.",
 			},
 			{
 				type: "slider",
@@ -188,6 +197,7 @@ function buildConfig(summary, settings) {
 				min: 0,
 				max: 54,
 				step: 1,
+				description: "GPS samples faster than this are ignored, so driving or a fast descent is not mistaken for a lift. Most chairlifts climb well below this.",
 			},
 		] },
 		{ type: "text", defaultValue: "Detection thresholds are metric; the units setting changes the stats. Changes affect future lifts, not past ones." },
