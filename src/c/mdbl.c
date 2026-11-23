@@ -6,15 +6,17 @@ int main(void) {
 
   // Poco plus the app modules need more than the default 32 kB engine pool.
   // The archive is loaded into RAM, so the XS pools and fxMapArchive's
-  // temporary symbol/map tables all share the ~122 kB app heap. This split is
-  // the tested working point; remeasure before growing the watch-side bundle.
+  // temporary symbol/map tables all share the ~122 kB app heap. Adding the
+  // coordinate history pushed Gabbro's slot heap over, so this split moves
+  // 1 kB from the stack and 2 kB from chunks into slots. Remeasure before
+  // growing the watch-side bundle again.
   ModdableCreationRecord cr = {
     .recordSize = sizeof(cr),
-    .stack = 6144,
-    .slot = 45568,
-    .chunk = 28672,
+    .stack = 5120,
+    .slot = 48640,
+    .chunk = 26624,
 #ifdef PBL_DEBUG
-    .flags = kModdableCreationFlagDebug,
+    .flags = kModdableCreationFlagDebug | kModdableCreationFlagLogInstrumentation,
 #endif
     .fxBuildFFI = fxBuildFFI,
   };

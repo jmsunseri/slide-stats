@@ -115,6 +115,33 @@ test("relaunching mid-climb continues the same lift without a second start", () 
 	assert.equal(relaunched.todayStats().vertical, 200);
 });
 
+test("relaunching mid-climb preserves the lift coordinates", () => {
+	const storage = memoryStorage();
+	const store = createDayStore({ storage, now: () => NOW }).load();
+	const detector = createLiftDetector();
+	const extra = { speed: 4, latitude: 47.1, longitude: -121.2 };
+
+	const first = feed(detector, climb(0, 2000, 2, 50, extra));
+	assert.equal(starts(first).length, 1);
+	store.setActiveLift(detector.snapshot());
+
+	const relaunched = createDayStore({ storage, now: () => NOW }).load();
+	const restored = relaunched.getToday().active;
+	assert.equal(restored.length, 8);
+
+	const detector2 = createLiftDetector();
+	detector2.restore(restored);
+	const descent = feed(detector2, descend(120000, 2100, 2, 20, { speed: 8 }));
+	save(relaunched, descent);
+
+	const end = ends(descent)[0];
+	assert.ok(end);
+	assert.equal(end.lift.startLat, 47.1);
+	assert.equal(end.lift.peakLat, 47.1);
+	assert.deepEqual(relaunched.getOutbox()[0].pts, [47100000, -121200000, 47100000, -121200000]);
+	assert.equal(relaunched.getToday().lifts[0].pts, undefined);
+});
+
 test("active lift state survives a reload but not pause, end day, or a new day", () => {
 	const storage = memoryStorage();
 	let clock = new Date(2026, 10, 22, 12, 0).getTime();

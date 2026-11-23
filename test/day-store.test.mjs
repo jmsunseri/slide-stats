@@ -67,6 +67,23 @@ test("adding lifts updates today, days, and the outbox without a base", () => {
 	assert.equal(outbox[0].gain, 400);
 });
 
+test("lift coordinates go to the outbox but not the local day", () => {
+	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
+	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
+
+	store.addLift(Object.assign(lift(400, 1000, 5000), {
+		startLat: 47.1,
+		startLon: -121.2,
+		peakLat: 47.2,
+		peakLon: -121.1,
+	}));
+
+	const local = store.getToday().lifts[0];
+	assert.equal(local.startLat, undefined);
+	assert.equal(local.pts, undefined);
+	assert.deepEqual(store.getOutbox()[0].pts, [47100000, -121200000, 47200000, -121100000]);
+});
+
 test("state round-trips through storage", () => {
 	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
 	const storage = memoryStorage();

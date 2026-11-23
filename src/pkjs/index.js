@@ -71,8 +71,13 @@ function saveSettings(settings) {
 	saveJson(SETTINGS_KEY, settings);
 }
 
+function validPoints(points) {
+	return Array.isArray(points) && points.length === 4 &&
+		points.every(value => typeof value === "number" && isFinite(value));
+}
+
 function cleanLift(record) {
-	return {
+	const lift = {
 		seq: record.seq,
 		uid: record.uid,
 		startTime: record.startTime,
@@ -83,6 +88,9 @@ function cleanLift(record) {
 		durationMs: record.durationMs,
 		incomplete: !!record.incomplete,
 	};
+	if (validPoints(record.pts))
+		lift.pts = record.pts.slice();
+	return lift;
 }
 
 function handleSync(raw) {

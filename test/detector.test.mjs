@@ -8,6 +8,10 @@ function sample(t, altitude, extra = {}) {
 	return Object.assign({ t, altitude, altitudeAccuracy: 5, speed: 0 }, extra);
 }
 
+function scaled(value) {
+	return Math.round(value * 1e6);
+}
+
 function feed(detector, samples) {
 	const events = [];
 	for (const item of samples)
@@ -68,6 +72,37 @@ test("fast chair is detected within one sample and ends on descent", () => {
 	assert.equal(end.lift.startTime, 0);
 	assert.equal(end.lift.endTime, 300000);
 	assert.equal(end.lift.durationMs, 300000);
+});
+
+test("a lift records its bottom and peak coordinates", () => {
+	const detector = createLiftDetector();
+	const samples = [];
+	for (let elapsed = 0; elapsed <= 60; elapsed += DT / 1000) {
+		samples.push(sample(elapsed * 1000, 2000 + 2 * elapsed, {
+			speed: 4,
+			latitude: 47.1 + elapsed * 0.0001,
+			longitude: -121.2 + elapsed * 0.0002,
+		}));
+	}
+
+	const ascent = feed(detector, samples);
+	assert.equal(starts(ascent).length, 1);
+	assert.equal(ends(ascent).length, 0);
+
+	const state = detector.snapshot();
+	assert.equal(state.length, 8);
+	assert.deepEqual(state.slice(4), [
+		scaled(47.1), scaled(-121.2),
+		scaled(47.1 + 60 * 0.0001), scaled(-121.2 + 60 * 0.0002),
+	]);
+
+	const descent = feed(detector, descend(70000, 2120, 2, 20, { speed: 8 }));
+	const end = ends(descent)[0];
+	assert.ok(end);
+	assert.equal(end.lift.startLat, 47.1);
+	assert.equal(end.lift.startLon, -121.2);
+	assert.equal(end.lift.peakLat, 47.1 + 60 * 0.0001);
+	assert.equal(end.lift.peakLon, -121.2 + 60 * 0.0002);
 });
 
 test("slow bunny lift is caught by the 90 s tier", () => {

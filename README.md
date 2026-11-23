@@ -40,6 +40,8 @@ A working first version:
 - One-blob persistence with a sync outbox that drains on launch
 - Lift sync to PebbleKit JS with unique record ids, so reinstalls, seq resets, and a
   second watch cannot double-count
+- Lift bottom and top GPS coordinates synced to the phone for future mapping; the watch's
+  local day records stay coordinate-free
 - Local dashboard: Today, Trips, Season, Settings, with live metric/imperial conversion
   for units and lift-detection thresholds
 - Three-colour theme from the phone settings: background, accent for the right-hand bar,
@@ -134,7 +136,7 @@ then Select again.
 The detector, season keys, day store, and formatting live in
 `src/embeddedjs/lib/core.js`; phone-side aggregation, trip maths, and summaries are in
 `src/pkjs/lib/stats.js`.
-There are 55 tests, including the phone sync/query handlers, dashboard colour fields, and lift-resume cases.
+There are 59 tests, including the phone sync/query handlers, dashboard colour fields, lift-resume, and coordinate cases.
 Run them with Node 22 or newer:
 
 ```sh
@@ -176,6 +178,8 @@ removed to keep the app bundle inside the watch's archive mapping limit.
   is alive. The mobile app launches the watch app when the settings gear is tapped.
 - The action-bar icons stay white at every accent colour, so a light accent leaves them
   low-contrast; pick a dark accent.
+- Lift coordinates are stored on the phone but are not shown in the dashboard yet; there
+  is no map view.
 - The phone must keep feeding GPS while the watch app is open. Background-location
   behaviour on iOS is the first thing to verify on snow.
 - The GPS stream stays open for the session; the settings interval controls how often the
@@ -185,4 +189,5 @@ removed to keep the app bundle inside the watch's archive mapping limit.
 
 - Field-test and tune detection against real chairlift traces
 - Accelerometer-gated GPS for battery
+- Show lift and descent-start coordinates on the dashboard or a map
 - Backcountry mode (issue #1)

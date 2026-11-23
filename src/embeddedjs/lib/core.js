@@ -60,11 +60,28 @@ function finite(value) {
 	return typeof value === "number" && isFinite(value);
 }
 
+function hasPoint(point) {
+	return finite(point.lat) && finite(point.lon);
+}
+
+function scaledCoord(value) {
+	return Math.round(value * 1e6);
+}
+
+function point(t, alt, sample) {
+	const result = { t, alt };
+	if (hasPoint(sample)) {
+		result.lat = sample.lat;
+		result.lon = sample.lon;
+	}
+	return result;
+}
+
 function createLiftDetector(options = {}) {
 	let config = Object.assign({}, DEFAULTS, options);
 	let phase = "idle";
 	let active = null;
-	let history = [];		// { t, raw, smooth }
+	let history = [];		// { t, raw, smooth, lat?, lon? }
 	let rawAltitudes = [];
 	let endCount = 0;
 	let lastSeenTime = null;
@@ -136,7 +153,7 @@ function createLiftDetector(options = {}) {
 	}
 
 	function makeLift(start, peak) {
-		return {
+		const lift = {
 			startTime: start.t,
 			endTime: peak.t,
 			startAltitude: start.alt,
@@ -144,6 +161,15 @@ function createLiftDetector(options = {}) {
 			gain: peak.alt - start.alt,
 			durationMs: peak.t - start.t,
 		};
+		if (hasPoint(start)) {
+			lift.startLat = start.lat;
+			lift.startLon = start.lon;
+		}
+		if (hasPoint(peak)) {
+			lift.peakLat = peak.lat;
+			lift.peakLon = peak.lon;
+		}
+		return lift;
 	}
 
 	function finishLift() {
@@ -176,12 +202,11 @@ function createLiftDetector(options = {}) {
 		// window. Use its raw altitude so the recorded gain is not filtered.
 		const bottom = lowest(samples);
 		const latest = samples[samples.length - 1];
-		const start = { t: bottom.t, alt: bottom.raw };
 
 		phase = "lift";
 		active = {
-			start,
-			peak: { t: latest.t, alt: latest.raw },
+			start: point(bottom.t, bottom.raw, bottom),
+			peak: point(latest.t, latest.raw, latest),
 		};
 		endCount = 0;
 		const lift = makeLift(active.start, active.peak);
@@ -190,10 +215,14 @@ function createLiftDetector(options = {}) {
 		return { type: "start", lift };
 	}
 
-	function updateLift(now, raw) {
+	function updateLift(now, raw, lat, lon) {
 		if (raw > active.peak.alt) {
 			active.peak.t = now;
 			active.peak.alt = raw;
+			if (finite(lat) && finite(lon)) {
+				active.peak.lat = lat;
+				active.peak.lon = lon;
+			}
 		}
 
 		const descent = active.peak.alt - raw;
@@ -208,17 +237,35 @@ function createLiftDetector(options = {}) {
 	}
 
 	function snapshot() {
-		return active ? [active.start.t, active.start.alt, active.peak.t, active.peak.alt] : null;
+		if (!active)
+			return null;
+		const state = [active.start.t, active.start.alt, active.peak.t, active.peak.alt];
+		// Coordinates are scaled to keep the persisted day small.
+		if (hasPoint(active.start) && hasPoint(active.peak)) {
+			state.push(
+				scaledCoord(active.start.lat),
+				scaledCoord(active.start.lon),
+				scaledCoord(active.peak.lat),
+				scaledCoord(active.peak.lon)
+			);
+		}
+		return state;
 	}
 
 	function restore(state) {
 		reset();
-		if (state && state.length === 4) {
-			phase = "lift";
-			active = {
-				start: { t: state[0], alt: state[1] },
-				peak: { t: state[2], alt: state[3] },
-			};
+		if (!state || (state.length !== 4 && state.length !== 8))
+			return;
+		phase = "lift";
+		active = {
+			start: { t: state[0], alt: state[1] },
+			peak: { t: state[2], alt: state[3] },
+		};
+		if (state.length === 8) {
+			active.start.lat = state[4] / 1e6;
+			active.start.lon = state[5] / 1e6;
+			active.peak.lat = state[6] / 1e6;
+			active.peak.lon = state[7] / 1e6;
 		}
 	}
 
@@ -257,7 +304,12 @@ function createLiftDetector(options = {}) {
 			rawAltitudes.shift();
 		const smoothed = median(rawAltitudes);
 
-		history.push({ t: now, raw: altitude, smooth: smoothed });
+		const entry = { t: now, raw: altitude, smooth: smoothed };
+		if (finite(sample.latitude) && finite(sample.longitude)) {
+			entry.lat = sample.latitude;
+			entry.lon = sample.longitude;
+		}
+		history.push(entry);
 		prune(now);
 
 		if (phase === "idle") {
@@ -266,7 +318,7 @@ function createLiftDetector(options = {}) {
 				events.push(event);
 		}
 		else {
-			const event = updateLift(now, altitude);
+			const event = updateLift(now, altitude, entry.lat, entry.lon);
 			if (event)
 				events.push(event);
 		}
@@ -395,6 +447,18 @@ function makeUid(date, seq) {
 	return date + ":" + seq + ":" + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
+function packPoints(lift) {
+	if (!(finite(lift.startLat) && finite(lift.startLon) &&
+		finite(lift.peakLat) && finite(lift.peakLon)))
+		return null;
+	return [
+		scaledCoord(lift.startLat),
+		scaledCoord(lift.startLon),
+		scaledCoord(lift.peakLat),
+		scaledCoord(lift.peakLon),
+	];
+}
+
 function createDayStore(options = {}) {
 	const storage = options.storage;
 	const now = options.now || (() => Date.now());
@@ -473,13 +537,17 @@ function createDayStore(options = {}) {
 		};
 		today.lifts.push(stored);
 
-		outbox.push(Object.assign({
+		const record = Object.assign({
 			id: uid,
 			kind: "lift",
 			date: key,
 			seq,
 			uid,
-		}, stored));
+		}, stored);
+		const pts = packPoints(lift);
+		if (pts)
+			record.pts = pts;
+		outbox.push(record);
 
 		save();
 		return stored;

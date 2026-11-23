@@ -82,6 +82,26 @@ test("sync stores a lift, acks it, and dedupes by uid", () => {
 	assert.equal(stored["2026-03-14"][0].gain, 450);
 });
 
+test("sync stores valid lift coordinates and drops malformed points", () => {
+	const { handlers, storage } = loadPkjs();
+	handlers.ready({});
+
+	const pts = [47100000, -121200000, 47200000, -121100000];
+	send(handlers, { Sync: JSON.stringify(lift({ pts })) });
+	send(handlers, {
+		Sync: JSON.stringify(lift({
+			id: "2026-03-14:2:xyz",
+			uid: "2026-03-14:2:xyz",
+			seq: 2,
+			pts: [1, 2],
+		})),
+	});
+
+	const stored = JSON.parse(storage.get("ss.lifts"));
+	assert.deepEqual(stored["2026-03-14"][0].pts, pts);
+	assert.equal(stored["2026-03-14"][1].pts, undefined);
+});
+
 test("delete removes the matching uid", () => {
 	const { handlers, storage } = loadPkjs();
 	handlers.ready({});

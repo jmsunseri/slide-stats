@@ -48,7 +48,14 @@ still needs a decision.
   returning mid-climb continues the same ride, and returning on the descent ends it. The
   state is discarded on a new day, pause, or end day. A long GPS gap no longer finalises
   the ride at the last peak; it keeps the active lift and lets the next samples extend or
-  end it.
+  end it. Coordinates, when available, are part of the saved state.
+- **Lift coordinates:** the detector keeps each sampled latitude/longitude in its ascent
+  window, so a finished lift carries the bottom (lowest sample) and peak (descent start)
+  coordinates. The watch's local day records stay coordinate-free; the sync outbox adds a
+  compact `pts` array (start lat, start lon, peak lat, peak lon, degrees × 1e6). The phone
+  persists `pts` in `ss.lifts`, and records without it remain valid. The packed form adds
+  about 48 bytes per lift, so a season is tens of kB. This keeps the larger coordinate
+  payload out of the watch's tight single-value state.
 - **History screens:** Today and Season are backed by the phone. The watch asks for one
   summary at a time with `Query` and the phone answers with `Data`. The watch keeps today's
   totals live from local data and uses the phone only for past days and neighbour keys.
@@ -150,10 +157,10 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 
 - Detection, season maths, persistence, and formatting live in one pure watch module,
   `src/embeddedjs/lib/core.js`; phone-side aggregation lives in `src/pkjs/lib/stats.js`.
-  Together with the PKJS sync/query handler, dashboard theme, and lift-resume tests, they
-  have 55 Node tests.
+  Together with the PKJS sync/query handler, dashboard theme, lift-resume, and coordinate
+  tests, they have 59 Node tests.
 - Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, car climb,
-  noisy GPS, missing altitude, long sample gap, day rollover.
+  noisy GPS, missing altitude, long sample gap, day rollover, lift coordinates.
 - The emulator's fake GPS has no altitude, so the old debug mock was removed to keep the
   bundle inside the archive mapping limit. Detection needs a real watch and phone.
 - Field test: one gondola in town, plus at least one real ski-day GPS trace to replay.
@@ -167,13 +174,15 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - The manifest deliberately includes only `manifest_mod.json`. Including Moddable's
   `manifest_typings.json` bundled the TypeScript `tsconfig` and `package` modules into
   the watch archive as dead runtime modules, costing 2.7 kB.
-- `src/c/mdbl.c` gives the engine an ~80 kB pool (stack 6 kB, slot 44.5 kB, chunk 28 kB).
+- `src/c/mdbl.c` gives the engine an ~80 kB pool (stack 5 kB, slot 47.5 kB, chunk 26 kB).
   The precompiled archive is loaded into RAM, so these pools, the archive, and
-  `fxMapArchive`'s temporary symbol/map tables all share the app heap. The current split
-  is the tested working point; remeasure before growing the watch-side bundle.
+  `fxMapArchive`'s temporary symbol/map tables all share the app heap. Adding the
+  coordinate history pushed Gabbro's slot heap over, so the split moved 1 kB from the
+  stack and 2 kB from chunks into slots. Remeasure before growing the bundle again.
 - Sync protocol: the watch sends one JSON record at a time in `Sync` and waits for an
   `Ack` containing the record id. Kinds are `lift` and `lift-delete`. The phone dedupes by
-  `uid` and stores records in PKJS `localStorage`.
+  `uid` and stores records in PKJS `localStorage`, including the optional packed `pts`
+  coordinates.
 - History protocol: `Query` carries `{ kind, key }`; `Data` returns the same key plus the
   day or season summary and its `older`/`newer` neighbours. The watch caps its summary
   cache, prefetches one level, and drops the queue on suspend.
@@ -199,7 +208,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 ## Implementation status
 
 - [x] Alloy project scaffolded for emery + gabbro
-- [x] Watch core and phone stats with 52 Node tests
+- [x] Watch core and phone stats with 59 Node tests
 - [x] Poco screens, native action bar, native-style More menu, and icon-only status
 - [x] Text Size/ContentSize FFI for the menu and detail fonts
 - [x] Two-peak mountain app icon (launcher + store sizes)
