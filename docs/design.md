@@ -68,9 +68,10 @@ still needs a decision.
   `0xRRGGBB` numbers.
 - **Phone page:** a Clay configuration page with **Settings** and **Stats** tabs.
   Settings is the default and holds units, vibration, trips, hemisphere, theme,
-  lift-detection thresholds, and the Save button. Stats cover today, the current season,
-  and this season's trips. No tables, charts, or export in v1. Detection thresholds are
-  edited in metric units; the units setting changes the stats. A top-of-page reminder
+  lift-detection thresholds, and the Save button. Stats cover today and a selected season
+  (current or past), plus that season's trips. A Season dropdown at the top of the Stats
+  tab lists every stored season. No tables, charts, or export in v1. Detection thresholds
+  are edited in metric units; the units setting changes the stats. A top-of-page reminder
   tells people to start the watch app before heading uphill; starting at the top loses the
   ascent.
 - **Settings split:** quick items on the watch (pause, end day, undo last lift, units,
@@ -163,7 +164,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - Detection, season maths, persistence, and formatting live in one pure watch module,
   `src/embeddedjs/lib/core.js`; phone-side aggregation lives in `src/pkjs/lib/stats.js`.
   Together with the PKJS sync/query handler, Clay config/settings mapping, lift-resume,
-  and coordinate tests, they have 66 Node tests.
+  and coordinate tests, they have 67 Node tests.
 - Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, vehicle climb,
   noisy GPS, missing altitude, long sample gap, day rollover, lift coordinates.
 - The emulator's fake GPS has no altitude, so the old debug mock was removed to keep the
@@ -199,9 +200,9 @@ Centred vertical stack, no decoration, with the native action bar on the right:
   the response, maps it back into the nested settings object, and sends `Settings`. The
   active watch info is populated so Clay chooses the 64-colour picker.
 - The Settings/Stats tabs use a small custom Clay `tabs` component and a custom function.
-  Items are tagged `group: "settings"` or `"stats"`; the function shows/hides groups and
-  collapses empty sections. The tabs bar is sticky; Settings is the default and holds the
-  Save button.
+  Items are tagged `group: "settings"`, `"stats"`, or `"season:<key>"`; the function
+  shows/hides groups, applies the `season-picker` selection, and collapses empty
+  sections. The tabs bar is sticky; Settings is the default and holds the Save button.
 - The page closes with `pebblejs://close#` on a phone; the emulator needs the usual
   config-page helper to open Clay's pypkjs URL.
 - The menu and detail screens scale from the watch's Text Size preference. A tiny FFI shim
@@ -222,7 +223,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 ## Implementation status
 
 - [x] Alloy project scaffolded for emery + gabbro
-- [x] Watch core and phone stats with 66 Node tests
+- [x] Watch core and phone stats with 67 Node tests
 - [x] Poco screens, native action bar, native-style More menu, and icon-only status
 - [x] Text Size/ContentSize FFI for the menu and detail fonts
 - [x] Two-peak mountain app icon (launcher + store sizes)

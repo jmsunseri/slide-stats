@@ -18,7 +18,7 @@ const SETTINGS_KEY = "ss.settings";
 // Clay registers the components used by the initial config, so give it the
 // full page shape up front. showConfiguration replaces this with current data.
 const clay = new Clay(
-	buildConfig(stats.summarize({}, DEFAULT_SETTINGS, new Date()), DEFAULT_SETTINGS),
+	buildConfig(stats.summarize({}, DEFAULT_SETTINGS, new Date()), DEFAULT_SETTINGS, {}),
 	clayTabsCustomFn,
 	{ autoHandleEvents: false }
 );
@@ -199,8 +199,9 @@ Pebble.addEventListener("appmessage", function (event) {
 
 Pebble.addEventListener("showConfiguration", function () {
 	const settings = loadSettings() || DEFAULT_SETTINGS;
-	const summary = stats.summarize(loadLifts(), settings, new Date());
-	clay.config = buildConfig(summary, settings);
+	const lifts = loadLifts();
+	const summary = stats.summarize(lifts, settings, new Date());
+	clay.config = buildConfig(summary, settings, lifts);
 	clay.setSettings(flattenSettings(settings));
 	ensureClayMeta();
 	Pebble.openURL(clay.generateUrl());

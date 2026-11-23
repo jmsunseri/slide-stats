@@ -22,6 +22,7 @@ const LIFTS = {
 		lift(3, START - 86400000 + 7200000, 495),
 	],
 	"2026-11-15": [lift(1, START - 7 * 86400000, 610)],
+	"2026-02-10": [lift(1, new Date(2026, 1, 10, 9, 0).getTime(), 700)],
 };
 
 function summary() {
@@ -44,7 +45,7 @@ function texts(config) {
 }
 
 test("Clay page has Settings and Stats tabs with grouped items", () => {
-	const config = buildConfig(summary(), DEFAULT_SETTINGS);
+	const config = buildConfig(summary(), DEFAULT_SETTINGS, LIFTS);
 	const tabs = config.find(item => item.type === "tabs");
 	assert.ok(tabs);
 	assert.equal(tabs.id, "page-tabs");
@@ -81,8 +82,31 @@ test("Clay page has Settings and Stats tabs with grouped items", () => {
 	assert.ok(colors.every(item => item.sunlight === false));
 });
 
+test("Clay season picker offers current and past seasons", () => {
+	const config = buildConfig(summary(), DEFAULT_SETTINGS, LIFTS);
+	const all = items(config);
+	const picker = all.find(item => item.id === "season-picker");
+	assert.ok(picker);
+	assert.equal(picker.type, "select");
+	assert.equal(picker.defaultValue, "2026");
+	assert.deepEqual(picker.options.map(option => option.label), ["2026-27 (current)", "2025-26"]);
+
+	const pastHeading = all.find(item =>
+		item.group === "season:2025" && item.type === "heading" &&
+		item.defaultValue === "Season 2025-26");
+	assert.ok(pastHeading);
+	const pastText = all.find(item =>
+		item.group === "season:2025" && item.type === "text" &&
+		item.defaultValue.includes("700 m"));
+	assert.ok(pastText);
+	const pastTrips = all.find(item =>
+		item.group === "season:2025" && item.type === "heading" &&
+		item.defaultValue === "Trips in 2025-26");
+	assert.ok(pastTrips);
+});
+
 test("lift detection fields explain the windows", () => {
-	const config = buildConfig(summary(), DEFAULT_SETTINGS);
+	const config = buildConfig(summary(), DEFAULT_SETTINGS, LIFTS);
 	const info = texts(config);
 	assert.ok(info.includes("two overlapping windows"));
 	assert.ok(info.includes("fast window catches"));
@@ -105,7 +129,7 @@ test("lift detection fields explain the windows", () => {
 });
 
 test("Clay stats show today and the current season", () => {
-	const config = buildConfig(summary(), DEFAULT_SETTINGS);
+	const config = buildConfig(summary(), DEFAULT_SETTINGS, LIFTS);
 	const text = texts(config);
 	assert.ok(text.includes("<strong>790 m</strong>"));
 	assert.ok(text.includes("2 runs · average 395 m · longest 410 m"));
@@ -121,7 +145,7 @@ test("Clay stats show today and the current season", () => {
 
 test("Clay stats use imperial units for the current season and trips", () => {
 	const imperial = Object.assign({}, DEFAULT_SETTINGS, { units: "imperial" });
-	const config = buildConfig(summary(), imperial);
+	const config = buildConfig(summary(), imperial, LIFTS);
 	const text = texts(config);
 	assert.ok(text.includes("<strong>2,592 ft</strong>"));
 	assert.ok(text.includes("<strong>9,432 ft</strong>"));
@@ -132,7 +156,7 @@ test("Clay stats use imperial units for the current season and trips", () => {
 
 test("Clay omits the trips section when trips are turned off", () => {
 	const hidden = Object.assign({}, DEFAULT_SETTINGS, { trips: false });
-	const config = buildConfig(summary(), hidden);
+	const config = buildConfig(summary(), hidden, LIFTS);
 	const headings = items(config)
 		.filter(item => item.type === "heading")
 		.map(item => item.defaultValue);

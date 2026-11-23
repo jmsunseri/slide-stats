@@ -1,6 +1,6 @@
 /*
  * Builds the Clay configuration page. Settings come first; the read-only
- * stats below cover today, the current season, and this season's trips.
+ * stats below cover today, a selected season, and that season's trips.
  */
 
 const stats = require("./stats");
@@ -62,6 +62,21 @@ function tripsText(trips, units) {
 	).join("<br>");
 }
 
+function seasonSummaries(lifts, settings, now) {
+	const data = lifts || {};
+	const days = stats.aggregateLifts(data);
+	return stats.seasonKeysFor(data, settings, now).map(key => {
+		const season = stats.seasonSummary(data, settings, key, now);
+		const keys = Object.keys(days)
+			.filter(day => stats.seasonKey(day, settings) === key)
+			.sort();
+		return Object.assign({}, season, {
+			daysCount: season.days,
+			trips: stats.groupTrips(keys, days, 2),
+		});
+	});
+}
+
 function tagGroup(items, group) {
 	for (const item of items) {
 		if (item.type === "section")
@@ -72,13 +87,14 @@ function tagGroup(items, group) {
 	return items;
 }
 
-function buildConfig(summary, settings) {
+function buildConfig(summary, settings, lifts) {
 	const flat = flattenSettings(settings);
 	const units = flat.units;
 	const today = summary.today || {};
-	const season = summary.season || {};
+	const generatedAt = summary.generatedAt ? new Date(summary.generatedAt) : new Date();
+	const seasons = seasonSummaries(lifts, settings, generatedAt);
+	const currentKey = (summary.season && summary.season.key) || (seasons[0] && seasons[0].key) || "";
 	const todayLabel = today.date ? "Today · " + stats.formatDateShort(today.date) : "Today";
-	const seasonLabel = season.label ? "Season " + season.label : "Season";
 
 	const settingsItems = tagGroup([
 		{ type: "section", items: [
@@ -201,24 +217,46 @@ function buildConfig(summary, settings) {
 		{ type: "submit", defaultValue: "Save Settings" },
 	], "settings");
 
-	const statsItems = tagGroup([
+	const pickerOptions = seasons.map(season => ({
+		label: season.key === currentKey ? season.label + " (current)" : season.label,
+		value: season.key,
+	}));
+	const statsCommon = tagGroup([
+		{
+			type: "select",
+			id: "season-picker",
+			label: "Season",
+			defaultValue: currentKey,
+			options: pickerOptions,
+		},
 		{ type: "heading", defaultValue: todayLabel, size: 3 },
 		{ type: "text", defaultValue: todayText(today, units) },
-		{ type: "heading", defaultValue: seasonLabel, size: 3 },
-		{ type: "text", defaultValue: seasonText(season, units) },
 	], "stats");
 
-	if (flat.trips) {
-		statsItems.push(
-			{ type: "heading", defaultValue: "Trips this season", size: 3 },
-			{ type: "text", defaultValue: tripsText(season.trips, units) }
-		);
+	const statsSeasons = [];
+	for (const season of seasons) {
+		const group = "season:" + season.key;
+		statsSeasons.push(...tagGroup([
+			{ type: "heading", defaultValue: "Season " + season.label, size: 3 },
+			{ type: "text", defaultValue: seasonText(season, units) },
+		], group));
+		if (flat.trips) {
+			statsSeasons.push(...tagGroup([
+				{
+					type: "heading",
+					defaultValue: season.key === currentKey ? "Trips this season" : "Trips in " + season.label,
+					size: 3,
+				},
+				{ type: "text", defaultValue: tripsText(season.trips, units) },
+			], group));
+		}
 	}
 
-	statsItems.push(
-		{ type: "text", defaultValue: "Stats are stored on this phone. Open Slide Stats on the watch before syncing." }
-	);
-	tagGroup(statsItems, "stats");
+	const statsFooter = tagGroup([
+		{ type: "text", defaultValue: "Stats are stored on this phone. Open Slide Stats on the watch before syncing." },
+	], "stats");
+	const statsItems = [...statsCommon, ...statsSeasons, ...statsFooter];
+
 
 	return [
 		{ type: "heading", defaultValue: "Slide Stats", size: 1 },

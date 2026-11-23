@@ -103,13 +103,26 @@ function clayTabsCustomFn() {
 		}
 	}
 
-	function showTab(name) {
+	function applyVisibility() {
+		var tabs = clayConfig.getItemById("page-tabs");
+		var tab = tabs ? tabs.get() : "settings";
+		var picker = clayConfig.getItemById("season-picker");
+		var season = picker ? picker.get() : "";
 		var items = clayConfig.getAllItems();
 		for (var i = 0; i < items.length; i++) {
 			var group = items[i].config.group;
 			if (!group)
 				continue;
-			if (group === name)
+			var visible;
+			if (group === "settings")
+				visible = tab === "settings";
+			else if (group === "stats")
+				visible = tab === "stats";
+			else if (group.indexOf("season:") === 0)
+				visible = tab === "stats" && group === "season:" + season;
+			else
+				visible = true;
+			if (visible)
 				items[i].show();
 			else
 				items[i].hide();
@@ -119,13 +132,20 @@ function clayTabsCustomFn() {
 
 	clayConfig.on(clayConfig.EVENTS.AFTER_BUILD, function () {
 		var tabs = clayConfig.getItemById("page-tabs");
-		if (!tabs)
-			return;
-		showTab(tabs.get());
-		tabs.on("change", function () {
-			showTab(tabs.get());
-			window.scrollTo(0, 0);
-		});
+		var picker = clayConfig.getItemById("season-picker");
+		applyVisibility();
+		if (tabs) {
+			tabs.on("change", function () {
+				applyVisibility();
+				window.scrollTo(0, 0);
+			});
+		}
+		if (picker) {
+			picker.on("change", function () {
+				applyVisibility();
+				window.scrollTo(0, 0);
+			});
+		}
 	});
 }
 
