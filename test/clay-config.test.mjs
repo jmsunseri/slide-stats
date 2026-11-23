@@ -4,7 +4,7 @@ import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
 const stats = require("../src/pkjs/lib/stats.js");
-const { buildConfig } = require("../src/pkjs/lib/clay-config.js");
+const { buildConfig, buildPurgeMap } = require("../src/pkjs/lib/clay-config.js");
 const { DEFAULT_SETTINGS, flattenSettings, applyClaySettings } = require("../src/pkjs/lib/settings.js");
 
 const NOW = new Date(2026, 10, 22, 12, 0);
@@ -103,6 +103,35 @@ test("Clay season picker offers current and past seasons", () => {
 		item.group === "season:2025" && item.type === "heading" &&
 		item.defaultValue === "Trips in 2025-26");
 	assert.ok(pastTrips);
+});
+
+test("Stats has a manage-data toggle and per-season purge lists", () => {
+	const purge = buildPurgeMap(LIFTS, DEFAULT_SETTINGS, NOW);
+	const config = buildConfig(summary(), DEFAULT_SETTINGS, LIFTS, purge);
+	const all = items(config);
+	const manage = all.find(item => item.id === "manage-data");
+	assert.ok(manage);
+	assert.equal(manage.type, "toggle");
+	assert.equal(manage.defaultValue, false);
+	assert.equal(manage.group, "stats");
+
+	const current = all.find(item => item.id === "purge-list-2026");
+	assert.ok(current);
+	assert.equal(current.type, "checkboxgroup");
+	assert.equal(current.messageKey, "purge:2026");
+	assert.equal(current.group, "data:2026");
+	assert.ok(current.options.some(label => label.includes("2026-11-22 (today)")));
+	assert.ok(current.options.some(label => label.includes("2 runs") && label.includes("790 m")));
+
+	const past = all.find(item => item.id === "purge-list-2025");
+	assert.ok(past);
+	assert.equal(past.messageKey, "purge:2025");
+	assert.ok(past.options.some(label => label.includes("2026-02-10") && label.includes("700 m")));
+
+	const deleteButton = all.find(item => item.id === "purge-submit-2026");
+	assert.ok(deleteButton);
+	assert.equal(deleteButton.type, "submit");
+	assert.equal(deleteButton.group, "data:2026");
 });
 
 test("lift detection fields explain the windows", () => {

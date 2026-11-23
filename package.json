@@ -32,7 +32,8 @@
       "Ack",
       "Settings",
       "Query",
-      "Data"
+      "Data",
+      "Purge"
     ],
     "resources": {
       "media": [

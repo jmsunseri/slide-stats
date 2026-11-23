@@ -216,3 +216,21 @@ test("a climb alone does not increment runs; an end event does", () => {
 	assert.equal(store.todayStats().runs, 1);
 	assert.ok(store.todayStats().vertical > 0);
 });
+
+test("purging today clears lifts, active state, closed state, and outbox", () => {
+	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
+	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
+	store.addLift(lift(400, 1000, 5000));
+	store.setActiveLift([0, 2000, 300000, 2600]);
+
+	assert.equal(store.purgeDay("1999-01-01"), false);
+	assert.equal(store.purgeDay(store.todayDate()), true);
+	assert.equal(store.getToday().lifts.length, 0);
+	assert.equal(store.getToday().active, null);
+	assert.equal(store.getOutbox().length, 0);
+
+	store.endDay();
+	assert.equal(store.isClosed(), true);
+	assert.equal(store.purgeDay(store.todayDate()), true);
+	assert.equal(store.isClosed(), false);
+});

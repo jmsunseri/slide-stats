@@ -656,7 +656,7 @@ function vibrate() {
 function setupMessage() {
 	try {
 		message = new Message({
-			keys: ["Sync", "Ack", "Settings", "Query", "Data"],
+			keys: ["Sync", "Ack", "Settings", "Query", "Data", "Purge"],
 			input: 1024,
 			output: 1024,
 			onReadable() {
@@ -670,6 +670,9 @@ function setupMessage() {
 				const data = msg.get("Data");
 				if (data)
 					handleData(data);
+				const purge = msg.get("Purge");
+				if (purge)
+					handlePurge(purge);
 			},
 			onWritable() {
 				messageReady = true;
@@ -795,6 +798,24 @@ function flushQuery() {
 	}
 }
 
+function handlePurge(raw) {
+	let data;
+	try {
+		data = JSON.parse(raw);
+	}
+	catch (error) {
+		console.log("slide-stats: bad purge: " + error);
+		return;
+	}
+	if (!data || !data.date)
+		return;
+	if (store.purgeDay(data.date)) {
+		detector.reset();
+		lastProcessed = 0;
+		updateAll();
+	}
+}
+
 function handleData(raw) {
 	let data;
 	try {
@@ -840,10 +861,14 @@ function applySettings(json) {
 		settings = store.getSettings();
 		updateTheme();
 		detector.setOptions(settings.detection);
+		history.day = {};
 		history.season = {};
 		if (currentScreen === "season") {
 			selectedSeasonKey = currentSeason();
 			queueSummary("season", selectedSeasonKey);
+		}
+		else if (currentScreen === "today" && selectedDayKey && selectedDayKey !== todayKey()) {
+			queueSummary("day", selectedDayKey);
 		}
 		if (settings.paused || isDayClosed()) {
 			detector.reset();

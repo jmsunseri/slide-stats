@@ -3,6 +3,8 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
+const stats = require("../src/pkjs/lib/stats.js");
+const { DEFAULT_SETTINGS } = require("../src/pkjs/lib/settings.js");
 
 /*
  * Load index.js with the tiny Pebble runtime it expects. The proxy stub keeps
@@ -248,5 +250,31 @@ test("Clay settings are mapped back into the Settings blob", () => {
 	assert.equal(settings.sampleIntervalMs, 30000);
 	assert.equal(settings.detection.minLiftGainM, 16);
 	assert.equal(settings.theme.background, 0x0055aa);
+	assert.ok(sent.at(-1).Settings);
+});
+
+
+test("purge response removes the selected day and tells the watch", () => {
+	const { handlers, sent, storage } = loadPkjs();
+	handlers.ready({});
+	const today = stats.dayKey(new Date());
+	const start = Date.now() - 3600000;
+	send(handlers, { Sync: JSON.stringify(lift({
+		date: today,
+		id: today + ":1:purge",
+		uid: today + ":1:purge",
+		startTime: start,
+		endTime: start + 300000,
+	})) });
+	handlers.showConfiguration({});
+
+	const season = stats.seasonKey(today, DEFAULT_SETTINGS);
+	handlers.webviewclosed({ response: JSON.stringify({
+		["purge:" + season]: { value: [true] },
+	}) });
+
+	const lifts = JSON.parse(storage.get("ss.lifts"));
+	assert.equal(lifts[today], undefined);
+	assert.ok(sent.some(message => message.Purge));
 	assert.ok(sent.at(-1).Settings);
 });

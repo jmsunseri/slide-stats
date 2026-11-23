@@ -43,7 +43,7 @@ A working first version:
 - Lift bottom and top GPS coordinates synced to the phone for future mapping; the watch's
   local day records stay coordinate-free
 - Clay configuration page with Settings and Stats tabs; the Stats tab has a season picker
-  for current and past seasons
+  for current and past seasons and a Manage data toggle for deleting days
 - Three-colour theme from the phone settings: background, accent for the right-hand bar,
   and text/font colour
 - Metric by default
@@ -114,14 +114,20 @@ Settings tab:
 Stats tab (past season selected):
 ![Slide Stats Clay stats tab with a past season](docs/images/config-stats.jpg)
 
+Stats tab with the data tools open:
+![Slide Stats Clay purge data controls](docs/images/config-data.jpg)
+
 The phone page is built with [Clay](https://github.com/pebble-dev/clay) and generated
 locally by PebbleKit JS, so it works offline. A sticky **Settings / Stats** tab bar
 switches between the settings form and the read-only summaries. Settings is the default
 tab and holds units, vibration, trips, hemisphere, the 64-colour theme picker, the
 lift-detection thresholds, and the Save button. Stats cover today and a selected season
 (current or past), plus that season's trips. A Season dropdown at the top of the Stats
-tab chooses the season. There are no tables or charts. A reminder at the top says to
-start the watch app before heading uphill.
+tab chooses the season. At the bottom of the Stats tab, **Manage data** reveals a
+multi-select list of the selected season's days and a **Delete selected** button. Deleting
+removes those days from this phone; deleting today also clears today's lifts from the
+watch. There are no tables or charts. A reminder at the top says to start the watch app
+before heading uphill.
 
 ## Build
 
@@ -149,7 +155,7 @@ then Select again.
 The detector, season keys, day store, and formatting live in
 `src/embeddedjs/lib/core.js`; phone-side aggregation, trip maths, and summaries are in
 `src/pkjs/lib/stats.js`.
-There are 67 tests, including the phone sync/query handlers, Clay config and settings mapping, lift-resume, and coordinate cases.
+There are 70 tests, including the phone sync/query handlers, Clay config and settings mapping, lift-resume, and coordinate cases.
 Run them with Node 22 or newer:
 
 ```sh
@@ -195,9 +201,12 @@ removed to keep the app bundle inside the watch's archive mapping limit.
   low-contrast; pick a dark accent.
 - Lift coordinates are stored on the phone but are not shown in the Clay page yet; there
   is no map view.
-- The Clay page has no tables or charts. Stats are summary text for today, the current
-  season, and this season's trips.
+- The Clay page has no tables or charts. Stats are summary text for today, the selected
+  season, and that season's trips.
 - Detection thresholds are edited in metric units; the units setting changes the stats.
+- Data deletion is permanent. The Manage data list is per day, not per lift; use the
+  watch's Undo Last Lift for an individual today lift. The day list is loaded when the
+  Clay page opens, so a very large history makes that page larger.
 - The phone must keep feeding GPS while the watch app is open. Background-location
   behaviour on iOS is the first thing to verify on snow.
 - The GPS stream stays open for the session; the settings interval controls how often the

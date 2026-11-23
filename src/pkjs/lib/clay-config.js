@@ -77,6 +77,24 @@ function seasonSummaries(lifts, settings, now) {
 	});
 }
 
+function buildPurgeMap(lifts, settings, now) {
+	const days = stats.aggregateLifts(lifts || {});
+	const units = settings && settings.units === "imperial" ? "imperial" : "metric";
+	const today = stats.dayKey(now || new Date());
+	const result = {};
+	for (const date of Object.keys(days).sort().reverse()) {
+		const key = stats.seasonKey(date, settings);
+		if (!result[key])
+			result[key] = [];
+		result[key].push({
+			date,
+			label: date + (date === today ? " (today)" : "") + " · " +
+				plural(days[date].r, "run", "runs") + " · " +
+				fmtVertical(days[date].v, units),
+		});
+	}
+	return result;
+}
 function tagGroup(items, group) {
 	for (const item of items) {
 		if (item.type === "section")
@@ -87,12 +105,13 @@ function tagGroup(items, group) {
 	return items;
 }
 
-function buildConfig(summary, settings, lifts) {
+function buildConfig(summary, settings, lifts, purgeMap) {
 	const flat = flattenSettings(settings);
 	const units = flat.units;
 	const today = summary.today || {};
 	const generatedAt = summary.generatedAt ? new Date(summary.generatedAt) : new Date();
 	const seasons = seasonSummaries(lifts, settings, generatedAt);
+	const purge = purgeMap || buildPurgeMap(lifts, settings, generatedAt);
 	const currentKey = (summary.season && summary.season.key) || (seasons[0] && seasons[0].key) || "";
 	const todayLabel = today.date ? "Today · " + stats.formatDateShort(today.date) : "Today";
 
@@ -252,11 +271,47 @@ function buildConfig(summary, settings, lifts) {
 		}
 	}
 
+	const manage = tagGroup([
+		{
+			type: "toggle",
+			id: "manage-data",
+			label: "Manage data for this season",
+			description: "Show the days in the selected season so you can delete them.",
+			defaultValue: false,
+		},
+	], "stats");
+
+	const dataGroups = [];
+	for (const season of seasons) {
+		const days = purge[season.key] || [];
+		const group = "data:" + season.key;
+		const items = [
+			{ type: "heading", defaultValue: "Delete days in " + season.label, size: 3 },
+			{ type: "text", defaultValue: "Select days to delete from this phone. Deleting is permanent." },
+		];
+		if (days.length) {
+			items.push(
+				{
+					type: "checkboxgroup",
+					id: "purge-list-" + season.key,
+					messageKey: "purge:" + season.key,
+					label: "Days",
+					options: days.map(day => day.label),
+					defaultValue: days.map(() => false),
+				},
+				{ type: "submit", id: "purge-submit-" + season.key, defaultValue: "Delete selected" }
+			);
+		}
+		else {
+			items.push({ type: "text", defaultValue: "No completed days stored for this season." });
+		}
+		dataGroups.push(...tagGroup(items, group));
+	}
+
 	const statsFooter = tagGroup([
 		{ type: "text", defaultValue: "Stats are stored on this phone. Open Slide Stats on the watch before syncing." },
 	], "stats");
-	const statsItems = [...statsCommon, ...statsSeasons, ...statsFooter];
-
+	const statsItems = [...statsCommon, ...statsSeasons, ...manage, ...dataGroups, ...statsFooter];
 
 	return [
 		{ type: "heading", defaultValue: "Slide Stats", size: 1 },
@@ -279,4 +334,4 @@ function buildConfig(summary, settings, lifts) {
 	];
 }
 
-module.exports = { buildConfig };
+module.exports = { buildConfig, buildPurgeMap };

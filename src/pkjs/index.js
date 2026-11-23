@@ -8,21 +8,30 @@
 const Clay = require("@rebble/clay");
 const moddableProxy = require("@moddable/pebbleproxy");
 const stats = require("./lib/stats");
-const { buildConfig } = require("./lib/clay-config");
+const { buildConfig, buildPurgeMap } = require("./lib/clay-config");
+const { deleteDays } = require("./lib/purge");
 const { tabsComponent, clayTabsCustomFn } = require("./lib/clay-tabs");
 const { DEFAULT_SETTINGS, flattenSettings, applyClaySettings } = require("./lib/settings");
 
 const LIFTS_KEY = "ss.lifts";
 const SETTINGS_KEY = "ss.settings";
 
-// Clay registers the components used by the initial config, so give it the
-// full page shape up front. showConfiguration replaces this with current data.
-const clay = new Clay(
-	buildConfig(stats.summarize({}, DEFAULT_SETTINGS, new Date()), DEFAULT_SETTINGS, {}),
-	clayTabsCustomFn,
-	{ autoHandleEvents: false }
-);
+// Register every standard component the real page can use, including the
+// checkboxgroup used by the data-management tools.
+const REGISTRATION_CONFIG = [
+	{ type: "heading", defaultValue: "" },
+	{ type: "text", defaultValue: "" },
+	{ type: "tabs", id: "page-tabs", defaultValue: "settings", options: [] },
+	{ type: "select", options: [] },
+	{ type: "toggle" },
+	{ type: "color" },
+	{ type: "slider", min: 0, max: 1, step: 1 },
+	{ type: "checkboxgroup", options: [] },
+	{ type: "submit", defaultValue: "" },
+];
+const clay = new Clay(REGISTRATION_CONFIG, clayTabsCustomFn, { autoHandleEvents: false });
 clay.registerComponent(tabsComponent);
+let purgeSnapshot = {};
 
 function ensureClayMeta() {
 	try {
@@ -200,8 +209,10 @@ Pebble.addEventListener("appmessage", function (event) {
 Pebble.addEventListener("showConfiguration", function () {
 	const settings = loadSettings() || DEFAULT_SETTINGS;
 	const lifts = loadLifts();
-	const summary = stats.summarize(lifts, settings, new Date());
-	clay.config = buildConfig(summary, settings, lifts);
+	const now = new Date();
+	const summary = stats.summarize(lifts, settings, now);
+	purgeSnapshot = buildPurgeMap(lifts, settings, now);
+	clay.config = buildConfig(summary, settings, lifts, purgeSnapshot);
 	clay.setSettings(flattenSettings(settings));
 	ensureClayMeta();
 	Pebble.openURL(clay.generateUrl());
@@ -224,6 +235,18 @@ Pebble.addEventListener("webviewclosed", function (event) {
 		values[key] = value && typeof value === "object" && "value" in value ? value.value : value;
 	}
 	const settings = applyClaySettings(values, loadSettings() || DEFAULT_SETTINGS);
+	const lifts = loadLifts();
+	const deleted = deleteDays(lifts, values, purgeSnapshot, stats.dayKey(new Date()));
+	if (deleted.removed)
+		saveLifts(lifts);
 	saveSettings(settings);
+	for (const date of deleted.deletedToday) {
+		Pebble.sendAppMessage(
+			{ Purge: JSON.stringify({ date }) },
+			function () {},
+			function (error) { console.log("slide-stats: purge send failed: " + JSON.stringify(error)); }
+		);
+	}
 	Pebble.sendAppMessage({ Settings: JSON.stringify(settings) });
+	purgeSnapshot = {};
 });

@@ -103,11 +103,27 @@ function clayTabsCustomFn() {
 		}
 	}
 
+	function clearDataSelections(exceptGroup) {
+		var items = clayConfig.getAllItems();
+		for (var i = 0; i < items.length; i++) {
+			var group = items[i].config.group;
+			if (!group || group.indexOf("data:") !== 0)
+				continue;
+			if (items[i].config.type !== "checkboxgroup")
+				continue;
+			if (group === exceptGroup)
+				continue;
+			items[i].set([]);
+		}
+	}
+
 	function applyVisibility() {
 		var tabs = clayConfig.getItemById("page-tabs");
 		var tab = tabs ? tabs.get() : "settings";
 		var picker = clayConfig.getItemById("season-picker");
 		var season = picker ? picker.get() : "";
+		var manage = clayConfig.getItemById("manage-data");
+		var managing = manage ? manage.get() : false;
 		var items = clayConfig.getAllItems();
 		for (var i = 0; i < items.length; i++) {
 			var group = items[i].config.group;
@@ -120,6 +136,8 @@ function clayTabsCustomFn() {
 				visible = tab === "stats";
 			else if (group.indexOf("season:") === 0)
 				visible = tab === "stats" && group === "season:" + season;
+			else if (group.indexOf("data:") === 0)
+				visible = tab === "stats" && managing && group === "data:" + season;
 			else
 				visible = true;
 			if (visible)
@@ -127,6 +145,7 @@ function clayTabsCustomFn() {
 			else
 				items[i].hide();
 		}
+		clearDataSelections(tab === "stats" && managing ? "data:" + season : "");
 		syncSections();
 	}
 
@@ -145,6 +164,43 @@ function clayTabsCustomFn() {
 				applyVisibility();
 				window.scrollTo(0, 0);
 			});
+		}
+		var manage = clayConfig.getItemById("manage-data");
+		if (manage) {
+			manage.on("change", function () {
+				applyVisibility();
+			});
+		}
+		var submits = clayConfig.getItemsByType("submit");
+		for (var s = 0; s < submits.length; s++) {
+			(function (submit) {
+				var id = submit.config.id;
+				if (!id || id.indexOf("purge-submit-") !== 0)
+					return;
+				submit.on("click", function (event) {
+					var group = submit.config.group;
+					var list = null;
+					var items = clayConfig.getAllItems();
+					for (var i = 0; i < items.length; i++) {
+						if (items[i].config.group === group && items[i].config.type === "checkboxgroup")
+							list = items[i];
+					}
+					var selected = 0;
+					if (list) {
+						var checked = list.get();
+						for (var j = 0; j < checked.length; j++) {
+							if (checked[j])
+								selected++;
+						}
+					}
+					if (!selected) {
+						event.preventDefault();
+						window.alert("Select at least one day to delete.");
+					}
+					else if (!window.confirm("Delete " + selected + (selected === 1 ? " day" : " days") + "? This cannot be undone."))
+						event.preventDefault();
+				});
+			})(submits[s]);
 		}
 	});
 }

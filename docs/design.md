@@ -70,10 +70,13 @@ still needs a decision.
   Settings is the default and holds units, vibration, trips, hemisphere, theme,
   lift-detection thresholds, and the Save button. Stats cover today and a selected season
   (current or past), plus that season's trips. A Season dropdown at the top of the Stats
-  tab lists every stored season. No tables, charts, or export in v1. Detection thresholds
-  are edited in metric units; the units setting changes the stats. A top-of-page reminder
-  tells people to start the watch app before heading uphill; starting at the top loses the
-  ascent.
+  tab lists every stored season. At the bottom of Stats, **Manage data** reveals a
+  multi-select list of that season's days and a **Delete selected** action; days are
+  removed from the phone, and selecting today also sends a Purge to the watch. No tables,
+  charts, or export in v1. The day list is built when the page opens; there is no live
+  fetch from PKJS. Detection thresholds are edited in metric units; the units setting
+  changes the stats. A top-of-page reminder tells people to start the watch app before
+  heading uphill; starting at the top loses the ascent.
 - **Settings split:** quick items on the watch (pause, end day, undo last lift, units,
   vibration, sync now); theme, hemisphere, altitude processing interval, detection
   thresholds, trips toggle, and the Clay page on the phone.
@@ -164,7 +167,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - Detection, season maths, persistence, and formatting live in one pure watch module,
   `src/embeddedjs/lib/core.js`; phone-side aggregation lives in `src/pkjs/lib/stats.js`.
   Together with the PKJS sync/query handler, Clay config/settings mapping, lift-resume,
-  and coordinate tests, they have 67 Node tests.
+  and coordinate tests, they have 70 Node tests.
 - Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, vehicle climb,
   noisy GPS, missing altitude, long sample gap, day rollover, lift coordinates.
 - The emulator's fake GPS has no altitude, so the old debug mock was removed to keep the
@@ -188,7 +191,8 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - Sync protocol: the watch sends one JSON record at a time in `Sync` and waits for an
   `Ack` containing the record id. Kinds are `lift` and `lift-delete`. The phone dedupes by
   `uid` and stores records in PKJS `localStorage`, including the optional packed `pts`
-  coordinates.
+  coordinates. Deleting a selected day sends a `Purge` message for today's date; the
+  watch clears today's lifts, active lift, outbox records, and closed flag.
 - History protocol: `Query` carries `{ kind, key }`; `Data` returns the same key plus the
   day or season summary and its `older`/`newer` neighbours. The watch caps its summary
   cache, prefetches one level, and drops the queue on suspend.
@@ -200,9 +204,14 @@ Centred vertical stack, no decoration, with the native action bar on the right:
   the response, maps it back into the nested settings object, and sends `Settings`. The
   active watch info is populated so Clay chooses the 64-colour picker.
 - The Settings/Stats tabs use a small custom Clay `tabs` component and a custom function.
-  Items are tagged `group: "settings"`, `"stats"`, or `"season:<key>"`; the function
-  shows/hides groups, applies the `season-picker` selection, and collapses empty
-  sections. The tabs bar is sticky; Settings is the default and holds the Save button.
+  Items are tagged `group: "settings"`, `"stats"`, `"season:<key>"`, or `"data:<key>"`; the
+  function shows/hides groups, applies the `season-picker`, enforces the `manage-data`
+  toggle, clears hidden purge selections, and collapses empty sections. The tabs bar is
+  sticky; Settings is the default and holds the Save button.
+- The data tools are a Clay `checkboxgroup` per season, keyed `purge:<season>`, with a
+  per-season Delete submit. The phone maps checked days back to `ss.lifts`; today is also
+  purged from the watch, while past days only need the phone history and a summary-cache
+  refresh via the Settings message.
 - The page closes with `pebblejs://close#` on a phone; the emulator needs the usual
   config-page helper to open Clay's pypkjs URL.
 - The menu and detail screens scale from the watch's Text Size preference. A tiny FFI shim
@@ -223,7 +232,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 ## Implementation status
 
 - [x] Alloy project scaffolded for emery + gabbro
-- [x] Watch core and phone stats with 67 Node tests
+- [x] Watch core and phone stats with 70 Node tests
 - [x] Poco screens, native action bar, native-style More menu, and icon-only status
 - [x] Text Size/ContentSize FFI for the menu and detail fonts
 - [x] Two-peak mountain app icon (launcher + store sizes)

@@ -566,6 +566,18 @@ function createDayStore(options = {}) {
 		return lift;
 	}
 
+	function purgeDay(date) {
+		ensureToday();
+		if (!today || today.date !== date)
+			return false;
+		today.lifts = [];
+		today.active = null;
+		today.closed = false;
+		outbox = outbox.filter(item => item.date !== date);
+		save();
+		return true;
+	}
+
 	function endDay() {
 		ensureToday();
 		today.closed = true;
@@ -645,6 +657,7 @@ function createDayStore(options = {}) {
 		ensureToday,
 		addLift,
 		undoLastLift,
+		purgeDay,
 		endDay,
 		resumeDay,
 		setSettings,
