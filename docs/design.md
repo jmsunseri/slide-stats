@@ -66,12 +66,13 @@ still needs a decision.
   bar and its icon cut-outs; text colours the clock, rows, menu, status icons, selection
   marker, and the mountain mark. Bar icons stay white. The watch stores packed
   `0xRRGGBB` numbers.
-- **Phone page:** a Clay configuration page. Settings come first: units, vibration,
-  trips, hemisphere, theme, and lift-detection thresholds. Read-only stats follow for
-  today, the current season, and this season's trips. No tabs, tables, charts, or export
-  in v1. Detection thresholds are edited in metric units; the units setting changes the
-  stats. A top-of-page reminder tells people to start the watch app before heading uphill;
-  starting at the top loses the ascent.
+- **Phone page:** a Clay configuration page with **Settings** and **Stats** tabs.
+  Settings is the default and holds units, vibration, trips, hemisphere, theme,
+  lift-detection thresholds, and the Save button. Stats cover today, the current season,
+  and this season's trips. No tables, charts, or export in v1. Detection thresholds are
+  edited in metric units; the units setting changes the stats. A top-of-page reminder
+  tells people to start the watch app before heading uphill; starting at the top loses the
+  ascent.
 - **Settings split:** quick items on the watch (pause, end day, undo last lift, units,
   vibration, sync now); theme, hemisphere, altitude processing interval, detection
   thresholds, trips toggle, and the Clay page on the phone.
@@ -197,6 +198,10 @@ Centred vertical stack, no decoration, with the native action bar on the right:
   `Settings` JSON blob: the phone seeds Clay's `clay-settings` from `ss.settings`, unwraps
   the response, maps it back into the nested settings object, and sends `Settings`. The
   active watch info is populated so Clay chooses the 64-colour picker.
+- The Settings/Stats tabs use a small custom Clay `tabs` component and a custom function.
+  Items are tagged `group: "settings"` or `"stats"`; the function shows/hides groups and
+  collapses empty sections. The tabs bar is sticky; Settings is the default and holds the
+  Save button.
 - The page closes with `pebblejs://close#` on a phone; the emulator needs the usual
   config-page helper to open Clay's pypkjs URL.
 - The menu and detail screens scale from the watch's Text Size preference. A tiny FFI shim

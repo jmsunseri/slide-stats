@@ -62,6 +62,16 @@ function tripsText(trips, units) {
 	).join("<br>");
 }
 
+function tagGroup(items, group) {
+	for (const item of items) {
+		if (item.type === "section")
+			tagGroup(item.items, group);
+		else
+			item.group = group;
+	}
+	return items;
+}
+
 function buildConfig(summary, settings) {
 	const flat = flattenSettings(settings);
 	const units = flat.units;
@@ -70,14 +80,7 @@ function buildConfig(summary, settings) {
 	const todayLabel = today.date ? "Today · " + stats.formatDateShort(today.date) : "Today";
 	const seasonLabel = season.label ? "Season " + season.label : "Season";
 
-	const config = [
-		{ type: "heading", defaultValue: "Slide Stats", size: 1 },
-		{ type: "text", defaultValue: "Settings and stats stay on this phone." },
-		{
-			type: "text",
-			defaultValue: "<strong>Start Slide Stats on the watch before heading uphill.</strong> It must be open to see the climb — lift, snowcat, car, or helicopter. If you start it at the top, that ascent is missed.",
-		},
-		{ type: "heading", defaultValue: "Settings", size: 2 },
+	const settingsItems = tagGroup([
 		{ type: "section", items: [
 			{
 				type: "select",
@@ -196,24 +199,46 @@ function buildConfig(summary, settings) {
 		] },
 		{ type: "text", defaultValue: "Detection thresholds are metric; the units setting changes the stats. Changes affect future lifts, not past ones." },
 		{ type: "submit", defaultValue: "Save Settings" },
-		{ type: "heading", defaultValue: "Stats", size: 2 },
+	], "settings");
+
+	const statsItems = tagGroup([
 		{ type: "heading", defaultValue: todayLabel, size: 3 },
 		{ type: "text", defaultValue: todayText(today, units) },
 		{ type: "heading", defaultValue: seasonLabel, size: 3 },
 		{ type: "text", defaultValue: seasonText(season, units) },
-	];
+	], "stats");
 
 	if (flat.trips) {
-		config.push(
+		statsItems.push(
 			{ type: "heading", defaultValue: "Trips this season", size: 3 },
 			{ type: "text", defaultValue: tripsText(season.trips, units) }
 		);
 	}
 
-	config.push(
+	statsItems.push(
 		{ type: "text", defaultValue: "Stats are stored on this phone. Open Slide Stats on the watch before syncing." }
 	);
-	return config;
+	tagGroup(statsItems, "stats");
+
+	return [
+		{ type: "heading", defaultValue: "Slide Stats", size: 1 },
+		{ type: "text", defaultValue: "Settings and stats stay on this phone." },
+		{
+			type: "text",
+			defaultValue: "<strong>Start Slide Stats on the watch before heading uphill.</strong> It must be open to see the climb — lift, snowcat, car, or helicopter. If you start it at the top, that ascent is missed.",
+		},
+		{
+			type: "tabs",
+			id: "page-tabs",
+			defaultValue: "settings",
+			options: [
+				{ label: "Settings", value: "settings" },
+				{ label: "Stats", value: "stats" },
+			],
+		},
+		...settingsItems,
+		...statsItems,
+	];
 }
 
 module.exports = { buildConfig };

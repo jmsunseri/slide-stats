@@ -43,14 +43,26 @@ function texts(config) {
 		.join("\n");
 }
 
-test("Clay config puts every setting before the stats", () => {
+test("Clay page has Settings and Stats tabs with grouped items", () => {
 	const config = buildConfig(summary(), DEFAULT_SETTINGS);
-	const settings = config.findIndex(item => item.type === "heading" && item.defaultValue === "Settings");
-	const submit = config.findIndex(item => item.type === "submit");
-	const statsHeading = config.findIndex(item => item.type === "heading" && item.defaultValue === "Stats");
-	assert.ok(settings >= 0);
-	assert.ok(submit > settings);
-	assert.ok(statsHeading > submit);
+	const tabs = config.find(item => item.type === "tabs");
+	assert.ok(tabs);
+	assert.equal(tabs.id, "page-tabs");
+	assert.equal(tabs.defaultValue, "settings");
+	assert.deepEqual(tabs.options, [
+		{ label: "Settings", value: "settings" },
+		{ label: "Stats", value: "stats" },
+	]);
+
+	const all = items(config);
+	const settingsItems = all.filter(item => item.group === "settings");
+	const statsItems = all.filter(item => item.group === "stats");
+	assert.ok(settingsItems.length > 0);
+	assert.ok(statsItems.length > 0);
+	assert.ok(settingsItems.some(item => item.type === "submit"));
+	assert.ok(!statsItems.some(item => item.type === "submit"));
+	assert.ok(settingsItems.some(item => item.messageKey === "units"));
+	assert.ok(statsItems.some(item => item.type === "text"));
 
 	assert.ok(texts(config).includes("Start Slide Stats on the watch before heading uphill"));
 	assert.equal(byKey(config, "units").defaultValue, "metric");

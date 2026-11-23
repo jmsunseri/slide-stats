@@ -9,6 +9,7 @@ const Clay = require("@rebble/clay");
 const moddableProxy = require("@moddable/pebbleproxy");
 const stats = require("./lib/stats");
 const { buildConfig } = require("./lib/clay-config");
+const { tabsComponent, clayTabsCustomFn } = require("./lib/clay-tabs");
 const { DEFAULT_SETTINGS, flattenSettings, applyClaySettings } = require("./lib/settings");
 
 const LIFTS_KEY = "ss.lifts";
@@ -18,9 +19,10 @@ const SETTINGS_KEY = "ss.settings";
 // full page shape up front. showConfiguration replaces this with current data.
 const clay = new Clay(
 	buildConfig(stats.summarize({}, DEFAULT_SETTINGS, new Date()), DEFAULT_SETTINGS),
-	null,
+	clayTabsCustomFn,
 	{ autoHandleEvents: false }
 );
+clay.registerComponent(tabsComponent);
 
 function ensureClayMeta() {
 	try {
