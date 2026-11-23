@@ -5,7 +5,9 @@ int main(void) {
   window_stack_push(w, true);
 
   // Poco plus the app modules need more than the default 32 kB engine pool.
-  // 45,568 is the largest slot that maps this archive; 46,080 fails.
+  // The archive is loaded into RAM, so the XS pools and fxMapArchive's
+  // temporary symbol/map tables all share the ~122 kB app heap. This split is
+  // the tested working point; remeasure before growing the watch-side bundle.
   ModdableCreationRecord cr = {
     .recordSize = sizeof(cr),
     .stack = 6144,

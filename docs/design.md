@@ -163,10 +163,14 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - One core module holds the detector, season keys, day store, and formatting. Alloy
   charges memory per module; four modules plus Piu exceeded the watch's engine heap.
 - The UI is drawn with **Poco**, not Piu. It is a small, redraw-on-change interface, and
-  Poco costs far less RAM on a 128 kB app heap.
+  Poco costs far less RAM on a ~122 kB app heap.
+- The manifest deliberately includes only `manifest_mod.json`. Including Moddable's
+  `manifest_typings.json` bundled the TypeScript `tsconfig` and `package` modules into
+  the watch archive as dead runtime modules, costing 2.7 kB.
 - `src/c/mdbl.c` gives the engine an ~80 kB pool (stack 6 kB, slot 44.5 kB, chunk 28 kB).
-  The action bar pushed the old 72 kB pool over. 45,568 is the largest slot that maps this
-  archive; 46,080 fails at `fxMapArchive`.
+  The precompiled archive is loaded into RAM, so these pools, the archive, and
+  `fxMapArchive`'s temporary symbol/map tables all share the app heap. The current split
+  is the tested working point; remeasure before growing the watch-side bundle.
 - Sync protocol: the watch sends one JSON record at a time in `Sync` and waits for an
   `Ack` containing the record id. Kinds are `lift` and `lift-delete`. The phone dedupes by
   `uid` and stores records in PKJS `localStorage`.
