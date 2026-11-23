@@ -52,6 +52,7 @@ test("Clay config puts every setting before the stats", () => {
 	assert.ok(submit > settings);
 	assert.ok(statsHeading > submit);
 
+	assert.ok(texts(config).includes("Start Slide Stats on the watch before heading uphill"));
 	assert.equal(byKey(config, "units").defaultValue, "metric");
 	assert.equal(byKey(config, "vibration").defaultValue, true);
 	assert.equal(byKey(config, "trips").defaultValue, true);
@@ -76,7 +77,7 @@ test("lift detection fields explain the windows and the speed gate", () => {
 	assert.ok(info.includes("slow window catches"));
 	assert.ok(info.includes("either window"));
 	assert.ok(info.includes("no speed filter"));
-	assert.ok(info.includes("snowcat or car climb"));
+	assert.ok(info.includes("snowcat, car, or helicopter climb"));
 	assert.ok(info.includes("10 meters"));
 
 	for (const key of ["intervalSec", "minGainM", "endDescentM", "fastWindowSec", "slowWindowSec"]) {

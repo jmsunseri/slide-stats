@@ -114,7 +114,8 @@ The phone page is built with [Clay](https://github.com/pebble-dev/clay) and gene
 locally by PebbleKit JS, so it works offline. Settings come first: units, vibration,
 trips, hemisphere, the 64-colour theme picker, and the lift-detection thresholds. Below
 the Save button are read-only summaries for today, the current season, and this season's
-trips. There are no tabs, tables, or charts.
+trips. There are no tabs, tables, or charts. A reminder at the top says to start the
+watch app before heading uphill.
 
 ## Build
 
@@ -176,6 +177,8 @@ removed to keep the app bundle inside the watch's archive mapping limit.
 ## Known limitations
 
 - The app must stay open while skiing. Wakeups cannot track continuously.
+- Start Slide Stats on the watch before heading uphill. The app must be open to see the
+  ascent, so starting it at the top misses that climb.
 - The in-progress lift is kept across app restarts on the same day; a new day starts fresh.
 - A lift that ends after local midnight counts on the new day.
 - There is no current-altitude display and no base-altitude value; only run counts and
@@ -189,8 +192,8 @@ removed to keep the app bundle inside the watch's archive mapping limit.
 - The Clay page has no tabs, tables, or charts. Stats are summary text for today, the
   current season, and this season's trips.
 - Detection thresholds are edited in metric units; the units setting changes the stats.
-- There is no speed filter. A steady snowcat or car climb can be counted as a lift; use Undo
-  Last Lift to correct an accidental detection.
+- There is no speed filter. A steady snowcat, car, or helicopter climb can be counted
+  as a lift; use Undo Last Lift to correct an accidental detection.
 - The phone must keep feeding GPS while the watch app is open. Background-location
   behaviour on iOS is the first thing to verify on snow.
 - The GPS stream stays open for the session; the settings interval controls how often the

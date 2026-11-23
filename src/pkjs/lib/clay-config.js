@@ -73,6 +73,10 @@ function buildConfig(summary, settings) {
 	const config = [
 		{ type: "heading", defaultValue: "Slide Stats", size: 1 },
 		{ type: "text", defaultValue: "Settings and stats stay on this phone." },
+		{
+			type: "text",
+			defaultValue: "<strong>Start Slide Stats on the watch before heading uphill.</strong> It must be open to see the climb — lift, snowcat, car, or helicopter. If you start it at the top, that ascent is missed.",
+		},
 		{ type: "heading", defaultValue: "Settings", size: 2 },
 		{ type: "section", items: [
 			{
@@ -136,7 +140,7 @@ function buildConfig(summary, settings) {
 		{ type: "heading", defaultValue: "Lift detection", size: 3 },
 		{
 			type: "text",
-			defaultValue: "The watch looks for a steady climb in two overlapping windows. The fast window catches quick chairlifts and gondolas; the slow window catches slow chairs, bunny lifts, and magic carpets. A lift starts when either window sees a rise of at least 10 meters. There is no speed filter, so a steady snowcat or car climb is counted too.",
+			defaultValue: "The watch looks for a steady climb in two overlapping windows. The fast window catches quick chairlifts and gondolas; the slow window catches slow chairs, bunny lifts, and magic carpets. A lift starts when either window sees a rise of at least 10 meters. There is no speed filter, so a steady snowcat, car, or helicopter climb is counted too.",
 		},
 		{ type: "section", items: [
 			{

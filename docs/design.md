@@ -70,7 +70,8 @@ still needs a decision.
   trips, hemisphere, theme, and lift-detection thresholds. Read-only stats follow for
   today, the current season, and this season's trips. No tabs, tables, charts, or export
   in v1. Detection thresholds are edited in metric units; the units setting changes the
-  stats.
+  stats. A top-of-page reminder tells people to start the watch app before heading uphill;
+  starting at the top loses the ascent.
 - **Settings split:** quick items on the watch (pause, end day, undo last lift, units,
   vibration, sync now); theme, hemisphere, altitude processing interval, detection
   thresholds, trips toggle, and the Clay page on the phone.
@@ -116,8 +117,9 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - **Fast start:** net gain ≥ 10 m within 30 s.
 - **Slow start:** net gain ≥ 10 m within 90 s (covers bunny lifts and magic carpets).
 - Most samples in the window must be rising, not a single noise spike.
-- No speed gate: a steady climb at any speed is counted, including a snowcat or car climb.
-  This is deliberate so vehicle access counts; Undo Last Lift corrects accidental detections.
+- No speed gate: a steady climb at any speed is counted, including a snowcat, car, or
+  helicopter climb. This is deliberate so vehicle access counts; Undo Last Lift corrects
+  accidental detections.
 - Detection runs on the median-filtered altitude. The lift's start and peak are recorded
   from raw altitudes so the filter does not shave metres off short lifts.
 - **End:** raw altitude ≥ 5 m below the lift peak for two samples. There is deliberately
