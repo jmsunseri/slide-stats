@@ -180,14 +180,14 @@ test("no descent between lifts merges them, as accepted", () => {
 	assert.equal(ends(events)[0].lift.gain, 200);
 });
 
-test("a car climbing a hill is ignored", () => {
+test("a steady vehicle climb is treated like a lift", () => {
 	const detector = createLiftDetector();
 	const samples = [
 		...climb(0, 1000, 5, 120, { speed: 15 }),
 		...flat(130000, 1600, 60, { speed: 0 }),
 	];
 	const events = feed(detector, samples);
-	assert.equal(starts(events).length, 0);
+	assert.equal(starts(events).length, 1);
 });
 
 test("noise around a fixed altitude does not start a lift", () => {

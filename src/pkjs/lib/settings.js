@@ -22,7 +22,6 @@ const DEFAULT_SETTINGS = {
 		slowWindowMs: 90000,
 		minLiftGainM: 10,
 		endDescentM: 5,
-		maxSpeedMps: 8,
 	},
 };
 
@@ -71,7 +70,6 @@ function flattenSettings(settings) {
 		endDescentM: Math.round(detection.endDescentM || 5),
 		fastWindowSec: Math.round((detection.fastWindowMs || 30000) / 1000),
 		slowWindowSec: Math.round((detection.slowWindowMs || 90000) / 1000),
-		maxSpeedKmh: Math.round((detection.maxSpeedMps || 8) * 3.6),
 		themeBackground: colorIn(theme.background, DEFAULT_SETTINGS.theme.background),
 		themeAccent: colorIn(theme.accent, DEFAULT_SETTINGS.theme.accent),
 		themeText: colorIn(theme.text, DEFAULT_SETTINGS.theme.text),
@@ -106,9 +104,7 @@ function applyClaySettings(values, current) {
 	detection.slowWindowMs = numberIn(
 		values.slowWindowSec, 60, 180, Math.round((baseDetection.slowWindowMs || 90000) / 1000)
 	) * 1000;
-	detection.maxSpeedMps = Math.round(numberIn(
-		values.maxSpeedKmh, 0, 54, Math.round((baseDetection.maxSpeedMps || 8) * 3.6)
-	) / 3.6);
+	delete detection.maxSpeedMps;
 	settings.detection = detection;
 	settings.theme = {
 		background: colorIn(values.themeBackground, baseTheme.background),

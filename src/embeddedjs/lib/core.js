@@ -12,7 +12,7 @@
  * reused by the debug screen. Feed it GPS samples; it emits `start`, `end`, and
  * `discard` events.
  *
- * A sample is `{ t, altitude, altitudeAccuracy?, speed? }` with `t` in ms and
+ * A sample is `{ t, altitude, altitudeAccuracy? }` with `t` in ms and
  * altitude in metres. Invalid samples are ignored.
  *
  * Detection runs on a median-filtered altitude so a single noisy fix cannot
@@ -34,8 +34,6 @@ const DEFAULTS = {
 	// A lift ends once altitude is 5 m below its peak for two samples.
 	endDescentM: 5,
 	endConfirmSamples: 2,
-	// Reject samples from cars/roads. Speed is optional.
-	maxSpeedMps: 8,
 	// Reject unusable altitude fixes.
 	maxAltitudeAccuracyM: 30,
 	// Median filter width, in samples.
@@ -293,8 +291,6 @@ function createLiftDetector(options = {}) {
 
 		if (finite(sample.altitudeAccuracy) && sample.altitudeAccuracy > config.maxAltitudeAccuracyM)
 			return events;
-		if (finite(sample.speed) && sample.speed > config.maxSpeedMps)
-			return events;
 
 		lastAcceptedTime = now;
 		lastAltitude = altitude;
@@ -420,7 +416,6 @@ const DEFAULT_SETTINGS = {
 		slowWindowMs: 90000,
 		minLiftGainM: 10,
 		endDescentM: 5,
-		maxSpeedMps: 8,
 	},
 };
 

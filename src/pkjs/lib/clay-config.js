@@ -136,7 +136,7 @@ function buildConfig(summary, settings) {
 		{ type: "heading", defaultValue: "Lift detection", size: 3 },
 		{
 			type: "text",
-			defaultValue: "The watch looks for a steady climb in two overlapping windows. The fast window catches quick chairlifts and gondolas; the slow window catches slow chairs, bunny lifts, and magic carpets. A lift starts when either window sees a rise of at least 10 meters. The maximum speed filters out samples from cars and other fast travel; it does not limit your skiing.",
+			defaultValue: "The watch looks for a steady climb in two overlapping windows. The fast window catches quick chairlifts and gondolas; the slow window catches slow chairs, bunny lifts, and magic carpets. A lift starts when either window sees a rise of at least 10 meters. There is no speed filter, so a steady snowcat or car climb is counted too.",
 		},
 		{ type: "section", items: [
 			{
@@ -188,16 +188,6 @@ function buildConfig(summary, settings) {
 				max: 180,
 				step: 10,
 				description: "A steady rise of 10 meters over up to this many seconds starts a slow lift. Increase it for very slow lifts; too long can miss short rides.",
-			},
-			{
-				type: "slider",
-				messageKey: "maxSpeedKmh",
-				label: "Maximum speed (km/h)",
-				defaultValue: flat.maxSpeedKmh,
-				min: 0,
-				max: 54,
-				step: 1,
-				description: "GPS samples faster than this are ignored, so driving or a fast descent is not mistaken for a lift. Most chairlifts climb well below this.",
 			},
 		] },
 		{ type: "text", defaultValue: "Detection thresholds are metric; the units setting changes the stats. Changes affect future lifts, not past ones." },

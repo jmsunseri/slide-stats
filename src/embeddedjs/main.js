@@ -615,7 +615,6 @@ function handleSample(sample) {
 		t: now,
 		altitude,
 		altitudeAccuracy: sample.altitudeAccuracy,
-		speed: sample.speed,
 		latitude: sample.latitude,
 		longitude: sample.longitude,
 	}));

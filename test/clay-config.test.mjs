@@ -61,7 +61,6 @@ test("Clay config puts every setting before the stats", () => {
 	assert.equal(byKey(config, "endDescentM").defaultValue, 5);
 	assert.equal(byKey(config, "fastWindowSec").defaultValue, 30);
 	assert.equal(byKey(config, "slowWindowSec").defaultValue, 90);
-	assert.equal(byKey(config, "maxSpeedKmh").defaultValue, 29);
 
 	const colors = items(config).filter(item => item.type === "color");
 	assert.deepEqual(colors.map(item => item.messageKey), ["themeBackground", "themeAccent", "themeText"]);
@@ -76,10 +75,11 @@ test("lift detection fields explain the windows and the speed gate", () => {
 	assert.ok(info.includes("fast window catches"));
 	assert.ok(info.includes("slow window catches"));
 	assert.ok(info.includes("either window"));
-	assert.ok(info.includes("maximum speed filters out samples from cars"));
+	assert.ok(info.includes("no speed filter"));
+	assert.ok(info.includes("snowcat or car climb"));
 	assert.ok(info.includes("10 meters"));
 
-	for (const key of ["intervalSec", "minGainM", "endDescentM", "fastWindowSec", "slowWindowSec", "maxSpeedKmh"]) {
+	for (const key of ["intervalSec", "minGainM", "endDescentM", "fastWindowSec", "slowWindowSec"]) {
 		const item = byKey(config, key);
 		assert.ok(item && item.description, key + " needs a description");
 	}
@@ -91,8 +91,6 @@ test("lift detection fields explain the windows and the speed gate", () => {
 	assert.ok(byKey(config, "endDescentM").label.includes("meters"));
 	assert.ok(!byKey(config, "minGainM").label.includes("(m)"));
 	assert.ok(!byKey(config, "endDescentM").label.includes("(m)"));
-	assert.ok(byKey(config, "maxSpeedKmh").description.includes("ignored"));
-	assert.ok(byKey(config, "maxSpeedKmh").description.includes("driving"));
 });
 
 test("Clay stats show today and the current season", () => {
@@ -144,7 +142,6 @@ test("flattenSettings maps nested settings to Clay values", () => {
 			endDescentM: 10,
 			fastWindowMs: 45000,
 			slowWindowMs: 120000,
-			maxSpeedMps: 10,
 		}),
 	});
 	const flat = flattenSettings(custom);
@@ -157,7 +154,6 @@ test("flattenSettings maps nested settings to Clay values", () => {
 	assert.equal(flat.endDescentM, 10);
 	assert.equal(flat.fastWindowSec, 45);
 	assert.equal(flat.slowWindowSec, 120);
-	assert.equal(flat.maxSpeedKmh, 36);
 	assert.equal(flat.themeBackground, 0x005555);
 	assert.equal(flat.themeAccent, 0xffaa00);
 	assert.equal(flat.themeText, 0xffffff);
@@ -181,7 +177,6 @@ test("applyClaySettings rebuilds the nested settings and converts units", () => 
 		endDescentM: "10",
 		fastWindowSec: "30",
 		slowWindowSec: "90",
-		maxSpeedKmh: "34",
 		themeBackground: 0x0055aa,
 		themeAccent: 0xffaa00,
 		themeText: 0xffffff,
@@ -195,7 +190,6 @@ test("applyClaySettings rebuilds the nested settings and converts units", () => 
 	assert.equal(settings.detection.endDescentM, 10);
 	assert.equal(settings.detection.fastWindowMs, 30000);
 	assert.equal(settings.detection.slowWindowMs, 90000);
-	assert.equal(settings.detection.maxSpeedMps, 9);
 	assert.equal(settings.detection.fastGainM, 12);
 	assert.equal(settings.detection.slowGainM, 9);
 	assert.equal(settings.paused, true);
@@ -211,7 +205,6 @@ test("applyClaySettings clamps bad values and preserves missing ones", () => {
 		endDescentM: 100,
 		fastWindowSec: 1,
 		slowWindowSec: 999,
-		maxSpeedKmh: 999,
 		themeBackground: "not-a-colour",
 	}, DEFAULT_SETTINGS);
 	assert.equal(clamped.sampleIntervalMs, 5000);
@@ -219,7 +212,6 @@ test("applyClaySettings clamps bad values and preserves missing ones", () => {
 	assert.equal(clamped.detection.endDescentM, 20);
 	assert.equal(clamped.detection.fastWindowMs, 20000);
 	assert.equal(clamped.detection.slowWindowMs, 180000);
-	assert.equal(clamped.detection.maxSpeedMps, 15);
 	assert.equal(clamped.theme.background, DEFAULT_SETTINGS.theme.background);
 
 	const preserved = applyClaySettings({}, {
@@ -236,4 +228,9 @@ test("applyClaySettings clamps bad values and preserves missing ones", () => {
 	assert.equal(preserved.seasonMode, "south");
 	assert.equal(preserved.theme.background, 0x0055aa);
 	assert.equal(preserved.detection.fastGainM, 12);
+
+	const old = Object.assign({}, DEFAULT_SETTINGS, {
+		detection: Object.assign({}, DEFAULT_SETTINGS.detection, { maxSpeedMps: 8 }),
+	});
+	assert.equal(applyClaySettings({}, old).detection.maxSpeedMps, undefined);
 });

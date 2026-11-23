@@ -237,7 +237,6 @@ test("Clay settings are mapped back into the Settings blob", () => {
 		endDescentM: { value: 10 },
 		fastWindowSec: { value: 30 },
 		slowWindowSec: { value: 90 },
-		maxSpeedKmh: { value: 34 },
 		themeBackground: { value: 0x0055aa },
 		themeAccent: { value: 0xffaa00 },
 		themeText: { value: 0xffffff },
@@ -247,7 +246,6 @@ test("Clay settings are mapped back into the Settings blob", () => {
 	assert.equal(settings.units, "imperial");
 	assert.equal(settings.sampleIntervalMs, 30000);
 	assert.equal(settings.detection.minLiftGainM, 16);
-	assert.equal(settings.detection.maxSpeedMps, 9);
 	assert.equal(settings.theme.background, 0x0055aa);
 	assert.ok(sent.at(-1).Settings);
 });

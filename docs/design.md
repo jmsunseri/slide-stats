@@ -116,7 +116,8 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - **Fast start:** net gain ≥ 10 m within 30 s.
 - **Slow start:** net gain ≥ 10 m within 90 s (covers bunny lifts and magic carpets).
 - Most samples in the window must be rising, not a single noise spike.
-- Optional max-speed gate: ignore samples while horizontal speed > 8 m/s (cars).
+- No speed gate: a steady climb at any speed is counted, including a snowcat or car climb.
+  This is deliberate so vehicle access counts; Undo Last Lift corrects accidental detections.
 - Detection runs on the median-filtered altitude. The lift's start and peak are recorded
   from raw altitudes so the filter does not shave metres off short lifts.
 - **End:** raw altitude ≥ 5 m below the lift peak for two samples. There is deliberately
@@ -161,7 +162,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
   `src/embeddedjs/lib/core.js`; phone-side aggregation lives in `src/pkjs/lib/stats.js`.
   Together with the PKJS sync/query handler, Clay config/settings mapping, lift-resume,
   and coordinate tests, they have 66 Node tests.
-- Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, car climb,
+- Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, vehicle climb,
   noisy GPS, missing altitude, long sample gap, day rollover, lift coordinates.
 - The emulator's fake GPS has no altitude, so the old debug mock was removed to keep the
   bundle inside the archive mapping limit. Detection needs a real watch and phone.
