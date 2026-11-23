@@ -1,39 +1,43 @@
 /*
- * PebbleKit JS: durable lift storage on the phone and the local stats page.
+ * PebbleKit JS: durable lift storage on the phone and the local Clay page.
  *
  * The watch sends one lift record at a time and waits for an Ack. The phone
  * dedupes by date + seq, so retries are harmless.
  */
 
+const Clay = require("@rebble/clay");
 const moddableProxy = require("@moddable/pebbleproxy");
 const stats = require("./lib/stats");
-const dashboard = require("./lib/dashboard");
+const { buildConfig } = require("./lib/clay-config");
+const { DEFAULT_SETTINGS, flattenSettings, applyClaySettings } = require("./lib/settings");
 
 const LIFTS_KEY = "ss.lifts";
 const SETTINGS_KEY = "ss.settings";
 
-const DEFAULT_SETTINGS = {
-	units: "metric",
-	vibration: true,
-	paused: false,
-	sampleIntervalMs: 10000,
-	seasonMode: "north",
-	trips: true,
-	theme: {
-		background: 0xffffff,
-		accent: 0x000000,
-		text: 0x000000,
-	},
-	detection: {
-		fastGainM: 10,
-		fastWindowMs: 30000,
-		slowGainM: 10,
-		slowWindowMs: 90000,
-		minLiftGainM: 10,
-		endDescentM: 5,
-		maxSpeedMps: 8,
-	},
-};
+// Clay registers the components used by the initial config, so give it the
+// full page shape up front. showConfiguration replaces this with current data.
+const clay = new Clay(
+	buildConfig(stats.summarize({}, DEFAULT_SETTINGS, new Date()), DEFAULT_SETTINGS),
+	null,
+	{ autoHandleEvents: false }
+);
+
+function ensureClayMeta() {
+	try {
+		if (typeof Pebble.getActiveWatchInfo === "function") {
+			const info = Pebble.getActiveWatchInfo();
+			if (info)
+				clay.meta.activeWatchInfo = info;
+		}
+	}
+	catch (error) {
+		console.log("slide-stats: watch info unavailable: " + error);
+	}
+	// Both targets are colour watches. This keeps the 64-colour picker when
+	// the phone cannot report the active watch.
+	if (!clay.meta.activeWatchInfo)
+		clay.meta.activeWatchInfo = { platform: "emery", firmware: { major: 3, minor: 0 } };
+}
 
 function loadJson(key, fallback) {
 	try {
@@ -194,26 +198,29 @@ Pebble.addEventListener("appmessage", function (event) {
 Pebble.addEventListener("showConfiguration", function () {
 	const settings = loadSettings() || DEFAULT_SETTINGS;
 	const summary = stats.summarize(loadLifts(), settings, new Date());
-	const html = dashboard.render({ summary: summary, settings: settings });
-	Pebble.openURL("data:text/html;charset=utf-8," + encodeURIComponent(html));
+	clay.config = buildConfig(summary, settings);
+	clay.setSettings(flattenSettings(settings));
+	ensureClayMeta();
+	Pebble.openURL(clay.generateUrl());
 });
 
 Pebble.addEventListener("webviewclosed", function (event) {
-	if (!event.response)
+	if (!event || !event.response)
 		return;
-	let settings;
+	let raw;
 	try {
-		settings = JSON.parse(event.response);
+		raw = clay.getSettings(event.response, false);
 	}
 	catch (error) {
-		try {
-			settings = JSON.parse(decodeURIComponent(event.response));
-		}
-		catch (second) {
-			console.log("slide-stats: bad config response: " + second);
-			return;
-		}
+		console.log("slide-stats: bad config response: " + error);
+		return;
 	}
+	const values = {};
+	for (const key of Object.keys(raw)) {
+		const value = raw[key];
+		values[key] = value && typeof value === "object" && "value" in value ? value.value : value;
+	}
+	const settings = applyClaySettings(values, loadSettings() || DEFAULT_SETTINGS);
 	saveSettings(settings);
 	Pebble.sendAppMessage({ Settings: JSON.stringify(settings) });
 });

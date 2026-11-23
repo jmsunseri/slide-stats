@@ -3,7 +3,7 @@
  * the Pebble tool, and Node tests load it with require().
  *
  * Input is `lifts`, a map of `YYYY-MM-DD` to lift records synced from the
- * watch. Output is everything the dashboard needs: today, season, trips, and
+ * watch. Output is everything the phone page needs: today, season, trips, and
  * an all-time summary.
  */
 
