@@ -55,6 +55,9 @@ Not done yet: real-world threshold tuning, accelerometer-gated GPS, and backcoun
 - **Today / Season:** Up and Down move to older and newer days or seasons; the action bar
   shows plain chevrons only in the directions that exist. Select does nothing and Back
   returns to Main.
+- **Closing the app mid-lift:** the in-progress lift is saved and resumed on the next
+  launch that day. Coming back while still climbing continues the same run; coming back
+  on the descent finishes it once, rather than waiting for a new ascent.
 - Day titles are **TODAY**, **YESTERDAY**, or **MMM DD**; season titles are the season
   label, such as **2026–27**. Vertical values are unsigned.
 - Today's totals are read live from the watch. Past days and all seasons come from the
@@ -131,7 +134,7 @@ then Select again.
 The detector, season keys, day store, and formatting live in
 `src/embeddedjs/lib/core.js`; phone-side aggregation, trip maths, and summaries are in
 `src/pkjs/lib/stats.js`.
-There are 52 tests, including the phone sync/query handlers and dashboard colour fields.
+There are 55 tests, including the phone sync/query handlers, dashboard colour fields, and lift-resume cases.
 Run them with Node 22 or newer:
 
 ```sh
@@ -165,7 +168,7 @@ removed to keep the app bundle inside the watch's archive mapping limit.
 ## Known limitations
 
 - The app must stay open while skiing. Wakeups cannot track continuously.
-- Closing the app mid-lift loses that in-progress lift; completed lifts survive.
+- The in-progress lift is kept across app restarts on the same day; a new day starts fresh.
 - A lift that ends after local midnight counts on the new day.
 - There is no current-altitude display and no base-altitude value; only run counts and
   vertical gain are shown.

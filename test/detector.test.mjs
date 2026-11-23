@@ -212,20 +212,23 @@ test("a lift below the minimum gain is discarded", () => {
 	];
 	const events = feed(detector, samples);
 	assert.equal(ends(events).length, 0);
-	assert.equal(events.filter(event => event.type === "discard").length, 1);
+	assert.equal(detector.snapshot(), null);
 });
 
-test("a long sample gap finalises the ride at its last peak", () => {
+test("a long sample gap keeps the ride active", () => {
 	const detector = createLiftDetector();
-	const samples = [
+	const resumed = feed(detector, [
 		...climb(0, 2000, 2, 50, { speed: 4 }),
-		sample(400000, 2100, { speed: 0 }),
-	];
-	const events = feed(detector, samples);
-	const end = ends(events)[0];
+		sample(400000, 2105, { speed: 0 }),
+	]);
+	assert.equal(starts(resumed).length, 1);
+	assert.equal(ends(resumed).length, 0);
+	assert.deepEqual(detector.snapshot(), [0, 2000, 400000, 2105]);
+
+	const descent = feed(detector, descend(410000, 2105, 2, 20, { speed: 8 }));
+	const end = ends(descent)[0];
 	assert.ok(end);
-	assert.equal(end.lift.gain, 100);
-	assert.equal(end.lift.incomplete, true);
+	assert.equal(end.lift.gain, 105);
 });
 
 test("a single altitude spike does not trigger through the median filter", () => {

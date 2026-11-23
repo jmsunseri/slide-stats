@@ -25,6 +25,9 @@ const storage = {
 let store = Core.createDayStore({ storage }).load();
 let settings = store.getSettings();
 let detector = Core.createLiftDetector(settings.detection);
+const savedToday = store.getToday();
+if (savedToday && savedToday.active)
+	detector.restore(savedToday.active);
 let location = null;
 let message = null;
 let messageReady = false;
@@ -325,7 +328,7 @@ function drawMenu() {
 		const selected = index === menuIndex;
 		if (selected)
 			render.fillRectangle(textColor, left + 2, y + 1, 3, fontRow.height - 2);
-		render.drawText(MENU[index].label(), selected ? fontRowBold : fontRow, textColor, left + 12, y);
+		render.drawText(menuLabel(MENU[index]), selected ? fontRowBold : fontRow, textColor, left + 12, y);
 	}
 
 	if (menuScroll > 0)
@@ -497,14 +500,19 @@ function draw() {
 /* Menu                                                                */
 /* ------------------------------------------------------------------ */
 
-const MENU = [
-	{ id: "day", label: () => (isDayClosed() ? "Resume Day" : "End Day") },
-	{ id: "pause", label: () => (settings.paused ? "Resume" : "Pause") },
-	{ id: "undo", label: () => "Undo Last Lift" },
-	{ id: "units", label: () => "Units: " + (settings.units === "metric" ? "Metric" : "Imperial") },
-	{ id: "vibration", label: () => "Vibration: " + (settings.vibration ? "On" : "Off") },
-	{ id: "sync", label: () => "Sync Now" },
-];
+const MENU = ["day", "pause", "undo", "units", "vibration", "sync"];
+
+function menuLabel(id) {
+	if (id === "day")
+		return isDayClosed() ? "Resume Day" : "End Day";
+	if (id === "pause")
+		return settings.paused ? "Resume" : "Pause";
+	if (id === "units")
+		return "Units: " + (settings.units === "metric" ? "Metric" : "Imperial");
+	if (id === "vibration")
+		return "Vibration: " + (settings.vibration ? "On" : "Off");
+	return id === "undo" ? "Undo Last Lift" : "Sync Now";
+}
 
 /* ------------------------------------------------------------------ */
 /* Navigation                                                          */
@@ -609,6 +617,7 @@ function handleSample(sample) {
 		altitudeAccuracy: sample.altitudeAccuracy,
 		speed: sample.speed,
 	}));
+	store.setActiveLift(detector.snapshot());
 }
 
 function handleEvents(events) {
@@ -835,8 +844,11 @@ function applySettings(json) {
 			selectedSeasonKey = currentSeason();
 			queueSummary("season", selectedSeasonKey);
 		}
-		if (settings.paused || isDayClosed())
+		if (settings.paused || isDayClosed()) {
+			detector.reset();
+			store.setActiveLift(null);
 			stopGps();
+		}
 		else
 			startGps();
 		updateAll();
@@ -857,6 +869,7 @@ function togglePause() {
 	sendSettings();
 	if (paused) {
 		detector.reset();
+		store.setActiveLift(null);
 		stopGps();
 	}
 	else {
@@ -906,7 +919,7 @@ function activateMenu() {
 	const item = MENU[menuIndex];
 	if (!item)
 		return;
-	switch (item.id) {
+	switch (item) {
 		case "day":
 			toggleDay();
 			closeMenu();
@@ -1051,6 +1064,7 @@ watch.addEventListener("daychange", () => {
 	const result = store.ensureToday();
 	if (result.changed) {
 		detector.reset();
+		store.setActiveLift(null);
 		lastProcessed = 0;
 		updateAll();
 	}

@@ -43,6 +43,12 @@ still needs a decision.
   lift; unacked records flush on launch. Every record carries a unique `uid`; the phone
   dedupes by `uid` (with `seq` as the legacy fallback), so a reinstall, a seq reset, or a
   second watch cannot double-count. There are no per-watch totals.
+- **Resuming a ride:** the active lift (start and peak) is persisted inside the day
+  record after every accepted sample. On launch it is restored into the detector, so
+  returning mid-climb continues the same ride, and returning on the descent ends it. The
+  state is discarded on a new day, pause, or end day. A long GPS gap no longer finalises
+  the ride at the last peak; it keeps the active lift and lets the next samples extend or
+  end it.
 - **History screens:** Today and Season are backed by the phone. The watch asks for one
   summary at a time with `Query` and the phone answers with `Data`. The watch keeps today's
   totals live from local data and uses the phone only for past days and neighbour keys.
@@ -144,8 +150,8 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 
 - Detection, season maths, persistence, and formatting live in one pure watch module,
   `src/embeddedjs/lib/core.js`; phone-side aggregation lives in `src/pkjs/lib/stats.js`.
-  Together with the PKJS sync/query handler and dashboard theme tests, they have 52 Node
-  tests.
+  Together with the PKJS sync/query handler, dashboard theme, and lift-resume tests, they
+  have 55 Node tests.
 - Fixtures: slow chair, fast gondola, bunny lift, magic carpet, mid-lift stop, car climb,
   noisy GPS, missing altitude, long sample gap, day rollover.
 - The emulator's fake GPS has no altitude, so the old debug mock was removed to keep the
@@ -195,6 +201,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - [x] Two-peak mountain app icon (launcher + store sizes)
 - [x] Sync protocol, PKJS store, and ack/dedupe
 - [x] Phone-backed Today and Season history with prefetch
+- [x] Resume an in-progress lift across app restarts
 - [x] Three-colour theme from the phone settings
 - [x] Local dashboard with Today / Trips / Season / Settings
 - [ ] Real-world threshold tuning
@@ -203,8 +210,8 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 
 ## Open questions
 
-- Whether to persist an in-progress lift across an app restart (only completed lifts
-  survive today).
+- Whether to finalise a stale resumed lift at the peak when the app is never opened again
+  that day, and how long a same-day resume should remain valid.
 - Whether a lift that spans midnight should count on its start day.
 - How much of the season history to keep on the watch before rolling old seasons up
   (currently none: every past day and season is fetched from the phone).

@@ -135,7 +135,7 @@ function createLiftDetector(options = {}) {
 		return moves > 0 && (rising / moves) >= 0.6;
 	}
 
-	function makeLift(start, peak, incomplete) {
+	function makeLift(start, peak) {
 		return {
 			startTime: start.t,
 			endTime: peak.t,
@@ -143,12 +143,11 @@ function createLiftDetector(options = {}) {
 			peakAltitude: peak.alt,
 			gain: peak.alt - start.alt,
 			durationMs: peak.t - start.t,
-			incomplete,
 		};
 	}
 
-	function finishLift(incomplete) {
-		const lift = makeLift(active.start, active.peak, incomplete);
+	function finishLift() {
+		const lift = makeLift(active.start, active.peak);
 		phase = "idle";
 		active = null;
 		endCount = 0;
@@ -158,7 +157,7 @@ function createLiftDetector(options = {}) {
 		if (history.length)
 			history = [history[history.length - 1]];
 		if (lift.gain < config.minLiftGainM)
-			return { type: "discard", lift };
+			return null;
 		return { type: "end", lift };
 	}
 
@@ -185,7 +184,7 @@ function createLiftDetector(options = {}) {
 			peak: { t: latest.t, alt: latest.raw },
 		};
 		endCount = 0;
-		const lift = makeLift(active.start, active.peak, false);
+		const lift = makeLift(active.start, active.peak);
 		lift.endTime = undefined;
 		lift.durationMs = undefined;
 		return { type: "start", lift };
@@ -201,11 +200,26 @@ function createLiftDetector(options = {}) {
 		if (descent >= config.endDescentM) {
 			endCount++;
 			if (endCount >= config.endConfirmSamples)
-				return finishLift(false);
+				return finishLift();
 		}
 		else
 			endCount = 0;
 		return null;
+	}
+
+	function snapshot() {
+		return active ? [active.start.t, active.start.alt, active.peak.t, active.peak.alt] : null;
+	}
+
+	function restore(state) {
+		reset();
+		if (state && state.length === 4) {
+			phase = "lift";
+			active = {
+				start: { t: state[0], alt: state[1] },
+				peak: { t: state[2], alt: state[3] },
+			};
+		}
 	}
 
 	function addSample(sample) {
@@ -222,11 +236,9 @@ function createLiftDetector(options = {}) {
 
 		const events = [];
 
-		// A long gap means we cannot trust the window any more. If a ride was
-		// in progress, close it at the last peak so its known gain is kept.
+		// A long gap means the ascent window is stale, but an active ride stays
+		// active: the next samples either extend its peak or end it on descent.
 		if (lastAcceptedTime !== null && now - lastAcceptedTime > config.gapResetMs) {
-			if (phase === "lift")
-				events.push(finishLift(true));
 			history = [];
 			rawAltitudes = [];
 			endCount = 0;
@@ -263,6 +275,8 @@ function createLiftDetector(options = {}) {
 
 	return {
 		addSample,
+		snapshot,
+		restore,
 		reset,
 		setOptions,
 	};
@@ -373,6 +387,7 @@ function emptyDay(key) {
 		date: key,
 		closed: false,
 		lifts: [],
+		active: null,
 	};
 }
 
@@ -442,6 +457,7 @@ function createDayStore(options = {}) {
 
 	function addLift(lift) {
 		ensureToday();
+		today.active = null;
 		const key = today.date;
 		const seq = nextSeq++;
 		const uid = makeUid(key, seq);
@@ -454,7 +470,6 @@ function createDayStore(options = {}) {
 			peakAltitude: Math.round(lift.peakAltitude),
 			gain: Math.round(lift.gain),
 			durationMs: lift.durationMs,
-			incomplete: !!lift.incomplete,
 		};
 		today.lifts.push(stored);
 
@@ -491,6 +506,7 @@ function createDayStore(options = {}) {
 	function endDay() {
 		ensureToday();
 		today.closed = true;
+		today.active = null;
 		save();
 	}
 
@@ -507,6 +523,8 @@ function createDayStore(options = {}) {
 
 	function setPaused(paused) {
 		settings.paused = !!paused;
+		if (settings.paused && today)
+			today.active = null;
 		save();
 	}
 
@@ -515,6 +533,13 @@ function createDayStore(options = {}) {
 		outbox = outbox.filter(item => item.id !== id);
 		if (outbox.length !== before)
 			save();
+	}
+
+	function setActiveLift(lift) {
+		if (!lift && !today.active)
+			return;
+		today.active = lift;
+		save();
 	}
 
 	function isTracking() {
@@ -566,6 +591,7 @@ function createDayStore(options = {}) {
 		isClosed,
 		todayDate,
 		todayStats,
+		setActiveLift,
 		getSettings: () => clone(settings),
 		getToday: () => (today ? clone(today) : null),
 		getOutbox: () => clone(outbox),
