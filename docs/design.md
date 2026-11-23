@@ -117,9 +117,8 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - **Fast start:** net gain ≥ 10 m within 30 s.
 - **Slow start:** net gain ≥ 10 m within 90 s (covers bunny lifts and magic carpets).
 - Most samples in the window must be rising, not a single noise spike.
-- No speed gate: a steady climb at any speed is counted, including a snowcat, car, or
-  helicopter climb. This is deliberate so vehicle access counts; Undo Last Lift corrects
-  accidental detections.
+- Any steady climb is treated as a lift, including a snowcat, car, or helicopter climb.
+  Undo Last Lift corrects accidental detections.
 - Detection runs on the median-filtered altitude. The lift's start and peak are recorded
   from raw altitudes so the filter does not shave metres off short lifts.
 - **End:** raw altitude ≥ 5 m below the lift peak for two samples. There is deliberately

@@ -192,8 +192,6 @@ removed to keep the app bundle inside the watch's archive mapping limit.
 - The Clay page has no tabs, tables, or charts. Stats are summary text for today, the
   current season, and this season's trips.
 - Detection thresholds are edited in metric units; the units setting changes the stats.
-- There is no speed filter. A steady snowcat, car, or helicopter climb can be counted
-  as a lift; use Undo Last Lift to correct an accidental detection.
 - The phone must keep feeding GPS while the watch app is open. Background-location
   behaviour on iOS is the first thing to verify on snow.
 - The GPS stream stays open for the session; the settings interval controls how often the

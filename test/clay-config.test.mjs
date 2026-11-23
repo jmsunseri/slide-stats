@@ -69,15 +69,13 @@ test("Clay config puts every setting before the stats", () => {
 	assert.ok(colors.every(item => item.sunlight === false));
 });
 
-test("lift detection fields explain the windows and the speed gate", () => {
+test("lift detection fields explain the windows", () => {
 	const config = buildConfig(summary(), DEFAULT_SETTINGS);
 	const info = texts(config);
 	assert.ok(info.includes("two overlapping windows"));
 	assert.ok(info.includes("fast window catches"));
 	assert.ok(info.includes("slow window catches"));
 	assert.ok(info.includes("either window"));
-	assert.ok(info.includes("no speed filter"));
-	assert.ok(info.includes("snowcat, car, or helicopter climb"));
 	assert.ok(info.includes("10 meters"));
 
 	for (const key of ["intervalSec", "minGainM", "endDescentM", "fastWindowSec", "slowWindowSec"]) {
