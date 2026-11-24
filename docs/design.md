@@ -131,8 +131,10 @@ Centred vertical stack, no decoration, with the native action bar on the right:
   descent merges the two rides into one; this was accepted as an infrequent case.
 - **Minimum counted lift:** 10 m, adjustable 5–50 m. A ride that ends below the minimum
   is discarded.
-- Vibration: optional, default on. Two short pulses at lift start and two at lift end.
-  A single pulse is avoided because it looks like a phone notification.
+- Vibration: optional, default on. Mirrored custom rhythms so start and end are
+  distinguishable and neither looks like a phone notification: an accelerating triple
+  pulse at lift start (100/80/160/80/240 ms) and the same rhythm decelerating at lift end
+  (240/80/160/80/100 ms).
 - **Undo last lift** in the More menu; the phone receives a correction.
 
 ## Screens and input

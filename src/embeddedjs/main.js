@@ -625,12 +625,12 @@ function handleEvents(events) {
 	for (const event of events) {
 		if (event.type === "start") {
 			console.log("slide-stats: lift start");
-			vibrate();
+			vibrate("start");
 		}
 		else if (event.type === "end") {
 			store.addLift(event.lift);
 			console.log("slide-stats: lift end " + Math.round(event.lift.gain) + " m");
-			vibrate();
+			vibrate("end");
 			lastProcessed = 0;
 			updateAll();
 			flushOutbox();
@@ -638,11 +638,15 @@ function handleEvents(events) {
 	}
 }
 
-function vibrate() {
+// Mirrored rhythms: accelerating when a lift starts, decelerating when it ends.
+const VIBE_START = [100, 80, 160, 80, 240];
+const VIBE_END = [240, 80, 160, 80, 100];
+
+function vibrate(kind) {
 	if (!settings.vibration)
 		return;
 	try {
-		Vibes.doublePulse();
+		Vibes.pattern(kind === "end" ? VIBE_END : VIBE_START);
 	}
 	catch (error) {
 		console.log("slide-stats: vibes failed: " + error);
