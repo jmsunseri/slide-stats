@@ -117,14 +117,55 @@ function drawRight(text, font, right, y) {
 	render.drawText(text, font, textColor, right - render.getTextWidth(text, font), y);
 }
 
-function drawNoGps(x, y) {
-	const cx = x + 8;
-	const cy = y + 8;
-	for (let angle = 0; angle < 6.283; angle += 0.2)
-		render.fillRectangle(textColor, Math.round(cx + Math.cos(angle) * 7), Math.round(cy + Math.sin(angle) * 7), 1, 1);
-	for (let i = -5; i <= 5; i++) {
-		render.fillRectangle(textColor, cx + i, cy + i, 2, 1);
-	}
+/*
+ * Check-connection geometry from pebble-dev/iconography
+ * Pebble_50x50_Check_internet_connection.svg. The watch body is filled with
+ * the theme background so the outline reads on any theme.
+ */
+function drawNoGps(cx, cy) {
+	const size = 24;
+	const scale = size / 50;
+	const x = value => Math.round(cx - size / 2 + value * scale);
+	const y = value => Math.round(cy - size / 2 + value * scale);
+
+	const bodyLeft = x(1.5);
+	const bodyRight = x(24.5);
+	const bodyTop = y(9.5);
+	const bodyBottom = y(45.5);
+	const bodyWidth = bodyRight - bodyLeft + 1;
+	const bodyHeight = bodyBottom - bodyTop + 1;
+
+	render.fillRectangle(bgColor, bodyLeft, bodyTop, bodyWidth, bodyHeight);
+	render.fillRectangle(textColor, bodyLeft, bodyTop, bodyWidth, 1);
+	render.fillRectangle(textColor, bodyLeft, bodyBottom, bodyWidth, 1);
+	render.fillRectangle(textColor, bodyLeft, bodyTop, 1, bodyHeight);
+	render.fillRectangle(textColor, bodyRight, bodyTop, 1, bodyHeight);
+
+	render.fillRectangle(textColor, x(6.5), y(3.5), 1, y(9.5) - y(3.5) + 1);
+
+	const faceLeft = x(6);
+	const faceRight = x(20);
+	const faceTop = y(14);
+	const faceBottom = y(22);
+	const faceWidth = faceRight - faceLeft + 1;
+	const faceHeight = faceBottom - faceTop + 1;
+	render.fillRectangle(textColor, faceLeft, faceTop, faceWidth, 1);
+	render.fillRectangle(textColor, faceLeft, faceBottom, faceWidth, 1);
+	render.fillRectangle(textColor, faceLeft, faceTop, 1, faceHeight);
+	render.fillRectangle(textColor, faceRight, faceTop, 1, faceHeight);
+
+	const barBottom = y(41.5);
+	const bars = [
+		[33.5, 37.5],
+		[38.5, 33.5],
+		[43.5, 29.5],
+		[48.5, 25.5],
+	];
+	for (const [barX, barTop] of bars)
+		render.fillRectangle(textColor, x(barX), y(barTop), 1, barBottom - y(barTop) + 1);
+
+	render.drawLine(x(36.5), y(13.5), x(43.5), y(21.5), textColor, 1);
+	render.drawLine(x(44.5), y(9.5), x(35.5), y(21.5), textColor, 1);
 }
 
 /*
@@ -242,7 +283,7 @@ function drawStatusIcons() {
 	if (!statusNoGps)
 		return;
 	const y = H - (ROUND ? 42 : 32);
-	drawNoGps(CONTENT_CENTER - 8, y);
+	drawNoGps(CONTENT_CENTER, y + 8);
 }
 
 function todayKey() {

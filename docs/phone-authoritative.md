@@ -203,9 +203,9 @@ the watch archive. The native ActionMenu is included in the final measurement:
 | Metric | Before | After |
 | --- | ---: | ---: |
 | App virtual size | 628 B | **2,096 B** |
-| Archive | 35,935 B | **27,429 B** |
+| Archive | 35,935 B | **28,654 B** |
 | XS pools | 78,336 B | 80,384 B (slot restored to 48,640) |
-| Hardware startup margin | +1,057 B | **+8,287 B** |
+| Hardware startup margin | +1,057 B | **+6,980 B** |
 
 The 40-run limit no longer applies to the watch: a 40-run day lives on the phone and pushes the
 same ~516-byte summary as a 1-run day. The 40-run stress harness was a watch-store test and is
@@ -234,8 +234,9 @@ The custom Poco menu was removed, including its menu drawing, scrolling, and inp
 - `npm run check-memory` → **OK** on emery and gabbro.
 - Emulator smoke test:
   - app launches and draws the main screen;
-  - phone `State` shows runs/vertical; the crossed circle appears when connected without
-    altitude, and the disconnected-watch icon appears when the phone link drops;
+  - phone `State` shows runs/vertical; the check-connection watch/signal icon appears when
+    connected without altitude, and the disconnected-watch icon appears when the phone link
+    drops;
   - Today and Season detail screens show the pushed state;
   - Units and Vibration reach PKJS and persist in `ss.settings`;
   - yesterday navigation issues `Query` and receives `Data`;

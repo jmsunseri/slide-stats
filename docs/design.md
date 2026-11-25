@@ -114,8 +114,9 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - No current altitude and no base altitude anywhere.
 - Runs and day vertical directly below the time (Gothic-Bold 24, falling back to 18 if a
   large imperial value would not fit).
-- Two exception icons: a disconnected watch when the phone link drops, and a crossed circle
-  when GPS/altitude is missing. No text status, no lift icon, no always-on indicator.
+- Two exception icons: a disconnected watch when the phone link drops, and the
+  check-connection watch/signal icon when GPS/altitude is missing. No text status, no lift
+  icon, no always-on indicator.
 - Time redraws on `minutechange`; totals on lift end; icons only on state change. The
   detail screens do not redraw on every minute. No animations, no forced backlight.
 
@@ -274,6 +275,6 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - The watch keeps the live `State` plus a small `Query`/`Data` cache. Past days and other
   seasons are fetched on demand; no season history is stored on the watch.
 - The watch distinguishes a dropped phone link (disconnected-watch icon from Pebble
-  iconography) from a connected phone without altitude (crossed circle).
+  iconography) from a connected phone without altitude (check-connection watch/signal icon).
 - Command delivery is best-effort. The next `State` corrects units/vibration; Undo is not
   replayed after a restart.
