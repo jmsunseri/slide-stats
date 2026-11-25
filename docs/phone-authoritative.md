@@ -78,7 +78,7 @@ raw value under `ss.lifts.corrupt` before starting from an empty map.
   `Query`/`Data` messages;
 - sends `Command` messages for menu actions;
 - vibrates on `Event`;
-- shows the no-GPS indicator.
+- shows the disconnected and no-GPS indicators.
 
 It no longer imports `Location`, the detector, the day store, or the outbox. The old
 `ss.state` blob is left untouched on flash so a rollback can still read it; the new watch
@@ -203,9 +203,9 @@ the watch archive. The native ActionMenu is included in the final measurement:
 | Metric | Before | After |
 | --- | ---: | ---: |
 | App virtual size | 628 B | **2,096 B** |
-| Archive | 35,935 B | **25,223 B** |
+| Archive | 35,935 B | **27,429 B** |
 | XS pools | 78,336 B | 80,384 B (slot restored to 48,640) |
-| Hardware startup margin | +1,057 B | **+10,747 B** |
+| Hardware startup margin | +1,057 B | **+8,287 B** |
 
 The 40-run limit no longer applies to the watch: a 40-run day lives on the phone and pushes the
 same ~516-byte summary as a 1-run day. The 40-run stress harness was a watch-store test and is
@@ -234,7 +234,8 @@ The custom Poco menu was removed, including its menu drawing, scrolling, and inp
 - `npm run check-memory` → **OK** on emery and gabbro.
 - Emulator smoke test:
   - app launches and draws the main screen;
-  - phone `State` shows runs/vertical and the no-GPS indicator;
+  - phone `State` shows runs/vertical; the crossed circle appears when connected without
+    altitude, and the disconnected-watch icon appears when the phone link drops;
   - Today and Season detail screens show the pushed state;
   - Units and Vibration reach PKJS and persist in `ss.settings`;
   - yesterday navigation issues `Query` and receives `Data`;
@@ -254,8 +255,6 @@ The custom Poco menu was removed, including its menu drawing, scrolling, and inp
 
 - Commands have no acknowledgement. A lost command is corrected by the next `State`, but undo
   is best-effort.
-- The watch does not show a distinct "phone disconnected" icon; no state and no GPS both show
-  the current no-GPS indicator.
 - Live detection still needs a real lift test. The synthetic traces and the PKJS probe cover
   the mechanics, not the detector's field behavior.
 - The native ActionMenu uses the firmware font and the crumb column only follows the theme;

@@ -95,7 +95,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 │                        │     │
 │    3 RUNS  1,240 m    │  ↓  │  stats, 24 px
 │                        │     │
-│  reserved bottom zone  │     │  status icons at bottom
+│  reserved bottom zone  │     │  disconnected/no-GPS at bottom
 └────────────────────────┴─────┘
 ```
 
@@ -114,8 +114,8 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - No current altitude and no base altitude anywhere.
 - Runs and day vertical directly below the time (Gothic-Bold 24, falling back to 18 if a
   large imperial value would not fit).
-- Only one exception icon: a crossed circle when GPS/altitude is missing. No text status,
-  no lift icon, no always-on indicator.
+- Two exception icons: a disconnected watch when the phone link drops, and a crossed circle
+  when GPS/altitude is missing. No text status, no lift icon, no always-on indicator.
 - Time redraws on `minutechange`; totals on lift end; icons only on state change. The
   detail screens do not redraw on every minute. No animations, no forced backlight.
 
@@ -143,7 +143,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 
 ## Screens and input
 
-- **Main** — clock, runs and day vertical, no-GPS icon.
+- **Main** — clock, runs and day vertical, disconnected/no-GPS icon.
 - **Today** — vertical, runs, first/last lift, average per run, longest run. Today's values
   come from the phone's `State`; past days are summaries fetched from the phone.
 - **Season** — label, days, vertical, runs, average/day, best day, fetched from the phone
@@ -266,8 +266,6 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 
 - Whether to finalise a stale resumed lift at the peak when the app is never opened again
   that day, and how long a same-day resume should remain valid.
-- Whether the watch should show a distinct phone-disconnected icon; today it reuses the
-  no-GPS indicator.
 
 ## Decisions since the redesign
 
@@ -275,5 +273,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
   behavior. `phone-store` keys records by `endTime`.
 - The watch keeps the live `State` plus a small `Query`/`Data` cache. Past days and other
   seasons are fetched on demand; no season history is stored on the watch.
+- The watch distinguishes a dropped phone link (disconnected-watch icon from Pebble
+  iconography) from a connected phone without altitude (crossed circle).
 - Command delivery is best-effort. The next `State` corrects units/vibration; Undo is not
   replayed after a restart.

@@ -32,7 +32,8 @@ A working first version:
   destination icons for Up/Select/Down
 - Phone-pushed Today and Season summaries: Up/Down walk older and newer days or seasons,
   while the watch caches the latest state
-- Icon-only no-GPS status, and only when it needs attention
+- Icon-only status: a disconnected watch when the phone link drops, a crossed circle when
+  GPS/altitude is missing, and only when an indicator is needed
 - Native Pebble ActionMenu for More, with Units, Vibration, and Undo Last Lift at the
   bottom; the left crumb column follows the theme accent and the body uses the system
   black/white style

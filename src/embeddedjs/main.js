@@ -127,6 +127,53 @@ function drawNoGps(x, y) {
 	}
 }
 
+/*
+ * Watch-disconnected geometry from pebble-dev/iconography
+ * Pebble_50x50_Watch_disconnected.svg. The body is filled with the theme
+ * background so the outline reads on any theme.
+ */
+function drawDisconnected(cx, cy) {
+	const size = 24;
+	const scale = size / 50;
+	const x = value => Math.round(cx - size / 2 + value * scale);
+	const y = value => Math.round(cy - size / 2 + value * scale);
+
+	const bodyLeft = x(3.5);
+	const bodyRight = x(26.5);
+	const bodyTop = y(9.5);
+	const bodyBottom = y(45.5);
+	const bodyWidth = bodyRight - bodyLeft + 1;
+	const bodyHeight = bodyBottom - bodyTop + 1;
+
+	render.fillRectangle(bgColor, bodyLeft, bodyTop, bodyWidth, bodyHeight);
+	render.fillRectangle(textColor, bodyLeft, bodyTop, bodyWidth, 1);
+	render.fillRectangle(textColor, bodyLeft, bodyBottom, bodyWidth, 1);
+	render.fillRectangle(textColor, bodyLeft, bodyTop, 1, bodyHeight);
+	render.fillRectangle(textColor, bodyRight, bodyTop, 1, bodyHeight);
+
+	render.fillRectangle(textColor, x(8.5), y(3.5), 1, y(9.5) - y(3.5) + 1);
+
+	const bandY = y(30);
+	render.fillRectangle(textColor, x(14), bandY, x(17) - x(14) + 1, 1);
+	render.fillRectangle(textColor, x(22), bandY, x(25) - x(22) + 1, 1);
+	render.fillRectangle(textColor, x(30), bandY, x(33) - x(30) + 1, 1);
+	render.fillRectangle(textColor, x(46), bandY, x(49) - x(46) + 1, 1);
+
+	const faceLeft = x(8);
+	const faceRight = x(22);
+	const faceTop = y(14);
+	const faceBottom = y(22);
+	const faceWidth = faceRight - faceLeft + 1;
+	const faceHeight = faceBottom - faceTop + 1;
+	render.fillRectangle(textColor, faceLeft, faceTop, faceWidth, 1);
+	render.fillRectangle(textColor, faceLeft, faceBottom, faceWidth, 1);
+	render.fillRectangle(textColor, faceLeft, faceTop, 1, faceHeight);
+	render.fillRectangle(textColor, faceRight, faceTop, 1, faceHeight);
+
+	render.drawLine(x(36.5), y(26.5), x(43.5), y(34.5), textColor, 1);
+	render.drawLine(x(46.5), y(21.5), x(35.5), y(35.5), textColor, 1);
+}
+
 function drawTriangle(cx, baseY, half, height, color) {
 	for (let i = 0; i < height; i++) {
 		const w = Math.round(half * i / (height - 1));
@@ -186,6 +233,12 @@ function drawPeaks(cx, baseY, height) {
 }
 
 function drawStatusIcons() {
+	const connection = watch.connected;
+	if (connection && connection.pebblekit === false) {
+		const y = H - (ROUND ? 42 : 32);
+		drawDisconnected(CONTENT_CENTER, y + 8);
+		return;
+	}
 	if (!statusNoGps)
 		return;
 	const y = H - (ROUND ? 42 : 32);
@@ -323,23 +376,59 @@ function drawBarMountain(cx, cy) {
 	}
 }
 
+/*
+ * Calendar geometry from pebble-dev/iconography 25px_Calendar.svg.
+ * The stroke uses the bar colour so the white fill reads as the icon and the
+ * detail lines become cut-outs, matching the other action-bar icons.
+ */
+function drawCalendarIcon(cx, cy, size, stroke) {
+	const scale = size / 25;
+	const x = value => Math.round(cx + (value - 12.5) * scale);
+	const y = value => Math.round(cy + (value - 12.5) * scale);
+	const left = x(4);
+	const right = x(21);
+	const top = y(5);
+	const bottom = y(21);
+	const width = right - left + 1;
+	const height = bottom - top + 1;
+
+	render.fillRectangle(white, left, top, width, height);
+
+	render.fillRectangle(stroke, left, top, width, 1);
+	render.fillRectangle(stroke, left, bottom, width, 1);
+	render.fillRectangle(stroke, left, top, 1, height);
+	render.fillRectangle(stroke, right, top, 1, height);
+
+	const tabLeft = x(8);
+	const tabRight = x(17);
+	const tabTop = y(3);
+	const tabBottom = y(8);
+	render.fillRectangle(stroke, tabLeft, tabTop, 1, tabBottom - tabTop + 1);
+	render.fillRectangle(stroke, tabRight, tabTop, 1, tabBottom - tabTop + 1);
+
+	const tickY = y(8);
+	render.fillRectangle(stroke, x(7), tickY, x(9) - x(7) + 1, 1);
+	render.fillRectangle(stroke, x(16), tickY, x(18) - x(16) + 1, 1);
+
+	const markLeft = x(13);
+	const markRight = x(17);
+	const markTop = y(14);
+	const markBottom = y(17);
+	const markWidth = markRight - markLeft + 1;
+	const markHeight = markBottom - markTop + 1;
+	render.fillRectangle(stroke, markLeft, markTop, markWidth, 1);
+	render.fillRectangle(stroke, markLeft, markBottom, markWidth, 1);
+	render.fillRectangle(stroke, markLeft, markTop, 1, markHeight);
+	render.fillRectangle(stroke, markRight, markTop, 1, markHeight);
+}
+
 function drawBarCalendar(cx, cy) {
-	render.fillRectangle(white, cx - 7, cy - 5, 14, 12);
-	render.fillRectangle(accentColor, cx - 7, cy - 2, 14, 1);
-	render.fillRectangle(accentColor, cx - 4, cy - 5, 1, 3);
-	render.fillRectangle(accentColor, cx + 3, cy - 5, 1, 3);
-	render.fillRectangle(accentColor, cx - 1, cy + 2, 2, 2);
+	drawCalendarIcon(cx, cy, 20, accentColor);
 }
 
 function drawBarSeason(cx, cy) {
-	// Back page.
-	render.fillRectangle(white, cx - 7, cy - 6, 12, 10);
-	render.fillRectangle(accentColor, cx - 7, cy - 3, 12, 1);
-	// Front page with a bar-coloured outline so it separates from the back page.
-	render.fillRectangle(accentColor, cx - 3, cy - 2, 12, 10);
-	render.fillRectangle(white, cx - 2, cy - 1, 10, 8);
-	render.fillRectangle(accentColor, cx - 2, cy + 1, 10, 1);
-	render.fillRectangle(accentColor, cx + 2, cy + 4, 2, 2);
+	drawCalendarIcon(cx - 2, cy - 2, 17, accentColor);
+	drawCalendarIcon(cx + 2, cy + 2, 17, accentColor);
 }
 
 function drawBarMore(cx, cy) {
@@ -1038,6 +1127,11 @@ new Button({
 
 watch.addEventListener("minutechange", () => {
 	if (!actionMenu && currentScreen === "main")
+		draw();
+});
+
+watch.addEventListener("connected", () => {
+	if (!actionMenu)
 		draw();
 });
 
