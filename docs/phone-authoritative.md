@@ -48,6 +48,26 @@ The probe is in `src/pkjs/probe.js`. It is controlled by `PHONE_PROBE` in
 `src/pkjs/index.js`; it is currently enabled on this test branch and should be disabled before
 merging the redesign.
 
+## Phone-side shadow store
+
+The first phone-side implementation is in place:
+
+- `src/pkjs/lib/detector.js` — generated CommonJS copy of the shared detector;
+- `src/pkjs/lib/phone-store.js` — durable phone lifts, sequence numbers, undo, and the compact
+  watch state;
+- `src/pkjs/lib/phone-detector.js` — geolocation samples → detector → store → state.
+
+For now the phone writes shadow lifts to `ss.phoneProbeLifts`, not the real `ss.lifts`. The
+watch is still authoritative, so this avoids duplicate counts. When the probe records a lift
+it logs:
+
+```text
+phone-probe: live end gain=... today=... runs/... m season=... runs/... m
+```
+
+The next step is to switch the phone to the real `ss.lifts` store, send `State` to the watch,
+and make the watch display-only for today/season.
+
 ## Proposed protocol
 
 Phone → watch `State`:

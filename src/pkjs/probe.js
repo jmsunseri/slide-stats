@@ -42,8 +42,38 @@ function logGeolocationProbe() {
 		return;
 	}
 	console.log("phone-probe: geolocation available");
-	const { createLiftDetector } = require("./lib/detector.js");
-	const detector = createLiftDetector();
+	const { createPhoneStore } = require("./lib/phone-store");
+	const { createPhoneDetector } = require("./lib/phone-detector");
+	const { DEFAULT_SETTINGS } = require("./lib/settings");
+	const storage = {
+		getItem: key => localStorage.getItem(key),
+		setItem: (key, value) => localStorage.setItem(key, value),
+	};
+	const store = createPhoneStore({ storage, key: "ss.phoneProbeLifts" });
+	function phoneSettings() {
+		try {
+			const raw = localStorage.getItem("ss.settings");
+			return raw ? JSON.parse(raw) : DEFAULT_SETTINGS;
+		}
+		catch (error) {
+			return DEFAULT_SETTINGS;
+		}
+	}
+	const detector = createPhoneDetector({
+		store,
+		getSettings: phoneSettings,
+		onEvent(event) {
+			if (event.type === "start") {
+				console.log("phone-probe: live start start=" + event.lift.startTime);
+				return;
+			}
+			console.log("phone-probe: live end gain=" + event.record.gain +
+				" today=" + event.state.today.runs + " runs/" +
+				event.state.today.vertical + " m" +
+				" season=" + event.state.season.runs + " runs/" +
+				event.state.season.vertical + " m");
+		},
+	});
 	navigator.geolocation.watchPosition(
 		position => {
 			const coords = position.coords;
@@ -52,20 +82,13 @@ function logGeolocationProbe() {
 				" accuracy=" + coords.accuracy +
 				" altitude=" + coords.altitude +
 				" altitudeAccuracy=" + coords.altitudeAccuracy);
-			const events = detector.addSample({
+			detector.addSample({
 				t: Date.now(),
 				altitude: coords.altitude,
 				altitudeAccuracy: coords.altitudeAccuracy,
 				latitude: coords.latitude,
 				longitude: coords.longitude,
 			});
-			for (const event of events) {
-				console.log("phone-probe: live " + event.type +
-					(event.lift
-						? " gain=" + Math.round(event.lift.gain) +
-							" start=" + event.lift.startTime
-						: ""));
-			}
 		},
 		error => {
 			console.log("phone-probe: geolocation error " + JSON.stringify(error));
