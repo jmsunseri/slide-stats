@@ -203,9 +203,9 @@ the watch archive. The native ActionMenu is included in the final measurement:
 | Metric | Before | After |
 | --- | ---: | ---: |
 | App virtual size | 628 B | **2,096 B** |
-| Archive | 35,935 B | **28,654 B** |
+| Archive | 35,935 B | **28,612 B** |
 | XS pools | 78,336 B | 80,384 B (slot restored to 48,640) |
-| Hardware startup margin | +1,057 B | **+6,980 B** |
+| Hardware startup margin | +1,057 B | **+7,022 B** |
 
 The 40-run limit no longer applies to the watch: a 40-run day lives on the phone and pushes the
 same ~516-byte summary as a 1-run day. The 40-run stress harness was a watch-store test and is

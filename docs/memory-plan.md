@@ -1303,13 +1303,13 @@ Measured after the redesign and the native ActionMenu (slot restored to 48,640):
 | Metric | Before (slot 47,616) | Phone redesign | + native menu |
 | --- | ---: | ---: | ---: |
 | App virtual size | 628 B | 628 B | **2,096 B** |
-| Archive | 35,935 B | 25,621 B | **28,654 B** |
+| Archive | 35,935 B | 25,621 B | **28,612 B** |
 | XS pools | 78,336 B | 80,384 B | 80,384 B |
 | Mapper scratch + IDs + maps | 5,876 B | 4,346 B | 4,742 B |
-| **Hardware startup margin** | **+1,057 B** | **+11,877 B** | **+6,980 B** |
+| **Hardware startup margin** | **+1,057 B** | **+11,877 B** | **+7,022 B** |
 
 `npm run check-memory` exits **0** and is above the 4 KiB target. The native ActionMenu
-and the icon redraw cost about 4.8 KiB net: the app image grew by about 1.5 KiB, the
+and the icon redraw cost about 4.7 KiB net: the app image grew by about 1.5 KiB, the
 archive grew by about 3.0 KiB, and the mapper tables grew with the new symbols.
 
 The watch no longer stores lift records, so the 40-run and outbox stress limits in 12.8 and
@@ -1317,7 +1317,7 @@ The watch no longer stores lift records, so the 40-run and outbox stress limits 
 state stays around **516 B**. The remaining runtime risk is the phone's geolocation lifecycle
 and AppMessage delivery, not watch storage.
 
-Recovered margin at `.slot = 48,640`: about **6.8 KiB** after the native ActionMenu and
+Recovered margin at `.slot = 48,640`: about **6.9 KiB** after the native ActionMenu and
 icon redraw. The ActionMenu experiment in H2 needed roughly 1–2 KiB of extra app image, which
 now fits with a large margin.
 

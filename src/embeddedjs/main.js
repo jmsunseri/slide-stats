@@ -448,8 +448,8 @@ function drawCalendarIcon(cx, cy, size, stroke) {
 	render.fillRectangle(stroke, tabRight, tabTop, 1, tabBottom - tabTop + 1);
 
 	const tickY = y(8);
-	render.fillRectangle(stroke, x(7), tickY, x(9) - x(7) + 1, 1);
-	render.fillRectangle(stroke, x(16), tickY, x(18) - x(16) + 1, 1);
+	render.fillRectangle(stroke, tabLeft - 1, tickY, 3, 1);
+	render.fillRectangle(stroke, tabRight - 1, tickY, 3, 1);
 
 	const markLeft = x(13);
 	const markRight = x(17);
