@@ -6,7 +6,6 @@
 const DEFAULT_SETTINGS = {
 	units: "metric",
 	vibration: true,
-	paused: false,
 	sampleIntervalMs: 10000,
 	seasonMode: "north",
 	trips: true,
@@ -115,6 +114,9 @@ function applyClaySettings(values, current) {
 
 	delete settings.seasonStartMonth;
 	delete settings.seasonStartDay;
+	delete settings.paused;
+	delete settings.closed;
+	delete settings.closedDate;
 	return settings;
 }
 

@@ -17,24 +17,17 @@ int32_t slide_content_size(void) {
 
 // Keep these values in sync with ACTION in src/embeddedjs/main.js.
 enum {
-  ACTION_DAY_CLOSE = 1,
-  ACTION_DAY_OPEN,
-  ACTION_PAUSE,
-  ACTION_RESUME,
-  ACTION_UNDO,
+  ACTION_UNDO = 1,
   ACTION_METRIC,
   ACTION_IMPERIAL,
   ACTION_VIBE_ON,
   ACTION_VIBE_OFF,
-  ACTION_SYNC,
 };
 
 // Keep these bits in sync with the flags built by openActionMenu() in main.js.
 enum {
-  FLAG_CLOSED = 1,
-  FLAG_PAUSED = 2,
-  FLAG_IMPERIAL = 4,
-  FLAG_VIBE_OFF = 8,
+  FLAG_IMPERIAL = 1,
+  FLAG_VIBE_OFF = 2,
 };
 
 extern Window *slide_app_window;
@@ -64,7 +57,7 @@ int32_t slide_action_menu_open(int32_t flags, uint32_t accent) {
     return 0;
 
   s_result = 0;
-  s_root = action_menu_level_create(6);
+  s_root = action_menu_level_create(3);
   ActionMenuLevel *units = action_menu_level_create(2);
   ActionMenuLevel *vibration = action_menu_level_create(2);
   if (!s_root || !units || !vibration) {
@@ -78,17 +71,6 @@ int32_t slide_action_menu_open(int32_t flags, uint32_t accent) {
     s_result = -1;
     return 0;
   }
-
-  action_menu_level_add_action(s_root,
-    (flags & FLAG_CLOSED) ? "Resume Day" : "End Day",
-    action_menu_perform,
-    (void *)(intptr_t)((flags & FLAG_CLOSED) ? ACTION_DAY_OPEN : ACTION_DAY_CLOSE));
-  action_menu_level_add_action(s_root,
-    (flags & FLAG_PAUSED) ? "Resume" : "Pause",
-    action_menu_perform,
-    (void *)(intptr_t)((flags & FLAG_PAUSED) ? ACTION_RESUME : ACTION_PAUSE));
-  action_menu_level_add_action(s_root, "Undo Last Lift",
-    action_menu_perform, (void *)(intptr_t)ACTION_UNDO);
 
   if (flags & FLAG_IMPERIAL) {
     action_menu_level_add_action(units, "Imperial",
@@ -120,8 +102,9 @@ int32_t slide_action_menu_open(int32_t flags, uint32_t accent) {
   action_menu_level_add_child(s_root, vibration,
     (flags & FLAG_VIBE_OFF) ? "Vibration: Off" : "Vibration: On");
 
-  action_menu_level_add_action(s_root, "Sync Now",
-    action_menu_perform, (void *)(intptr_t)ACTION_SYNC);
+  // Destructive action last, away from the settings submenus.
+  action_menu_level_add_action(s_root, "Undo Last Lift",
+    action_menu_perform, (void *)(intptr_t)ACTION_UNDO);
 
   ActionMenuConfig config = {
     .root_level = s_root,

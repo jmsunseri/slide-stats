@@ -26,14 +26,9 @@ function mergeSettings(stored, current) {
 	settings.detection = Object.assign(
 		{}, DEFAULT_SETTINGS.detection, base.detection || {}, source.detection || {}
 	);
-	settings.paused = source.paused !== undefined ? !!source.paused : !!base.paused;
-	settings.closed = source.closed !== undefined ? !!source.closed : !!base.closed;
-	if (!settings.closed)
-		settings.closedDate = null;
-	else if (source.closedDate !== undefined)
-		settings.closedDate = source.closedDate;
-	else
-		settings.closedDate = base.closedDate || null;
+	delete settings.paused;
+	delete settings.closed;
+	delete settings.closedDate;
 	return settings;
 }
 
@@ -164,26 +159,11 @@ function createPhoneRuntime(options = {}) {
 		}
 	}
 
-	function pauseTracking() {
-		clearActive();
-		stopGeolocation();
-	}
-
-	function resumeTracking() {
-		lastProcessed = 0;
-		startGeolocation();
-	}
-
 	function applySettings(next) {
 		settings = mergeSettings(next, settings);
 		detector.setOptions(settings.detection);
-		if (started) {
-			if (settings.paused || settings.closed)
-				pauseTracking();
-			else
-				resumeTracking();
+		if (started)
 			sendState();
-		}
 		return settings;
 	}
 
@@ -224,7 +204,7 @@ function createPhoneRuntime(options = {}) {
 	}
 
 	function startGeolocation() {
-		if (watchId !== null || !geolocation || settings.paused || settings.closed)
+		if (watchId !== null || !geolocation)
 			return;
 		gps = false;
 		watchId = geolocation.watchPosition(onPosition, onError, {
@@ -267,24 +247,7 @@ function createPhoneRuntime(options = {}) {
 			return;
 		console.log("phone-runtime: command " + command.type);
 
-		if (command.type === "day") {
-			settings.closed = !!command.value;
-			settings.closedDate = settings.closed ? stats.dayKey(new Date(now())) : null;
-			if (settings.closed)
-				pauseTracking();
-			else
-				resumeTracking();
-			commitSettings();
-		}
-		else if (command.type === "pause") {
-			settings.paused = !!command.value;
-			if (settings.paused)
-				pauseTracking();
-			else
-				resumeTracking();
-			commitSettings();
-		}
-		else if (command.type === "undo") {
+		if (command.type === "undo") {
 			store.undoLastLift(stats.dayKey(new Date(now())));
 			sendState();
 		}
@@ -307,10 +270,7 @@ function createPhoneRuntime(options = {}) {
 			return false;
 		dayKey = next;
 		clearActive();
-		settings.closed = false;
-		settings.closedDate = null;
-		saveSettings(settings);
-		if (started && !settings.paused) {
+		if (started) {
 			lastProcessed = 0;
 			startGeolocation();
 		}
@@ -324,16 +284,8 @@ function createPhoneRuntime(options = {}) {
 			return false;
 		started = true;
 		detector.setOptions(settings.detection);
-		const today = stats.dayKey(new Date(now()));
-		if (settings.closed && settings.closedDate !== today) {
-			settings.closed = false;
-			settings.closedDate = null;
-			saveSettings(settings);
-		}
-		if (!settings.paused && !settings.closed) {
-			restoreActive();
-			startGeolocation();
-		}
+		restoreActive();
+		startGeolocation();
 		sendState();
 		return true;
 	}

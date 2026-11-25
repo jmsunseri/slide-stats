@@ -26,15 +26,16 @@ A working first version:
 
 - Automatic lift detection on the phone (fast and slow tiers, median-filtered altitude,
   descent-based ending)
-- Auto-start on launch, pause, end day, undo last lift
+- Auto-start on launch, undo last lift; exit the app to stop
 - Time at the true vertical centre — centred in the content area on Emery and in the circle on Gabbro — with runs and vertical directly below
 - Native action bar on the right: straight on Emery, curved on Gabbro, with
   destination icons for Up/Select/Down
 - Phone-pushed Today and Season summaries: Up/Down walk older and newer days or seasons,
   while the watch caches the latest state
-- Icon-only status: pause and no-GPS, and only when they need attention
-- Native Pebble ActionMenu for More, with Units and Vibration submenus; the left crumb
-  column follows the theme accent and the body uses the system black/white style
+- Icon-only no-GPS status, and only when it needs attention
+- Native Pebble ActionMenu for More, with Units, Vibration, and Undo Last Lift at the
+  bottom; the left crumb column follows the theme accent and the body uses the system
+  black/white style
 - Four-peak main-face mark: two snow-capped back peaks and two smaller front peaks, with
   white separator lines; the launcher/store badge keeps the two-peak icon
 - North/South seasons, re-bucketed automatically if the setting changes
@@ -52,7 +53,9 @@ Not done yet: real-world threshold tuning, accelerometer-gated GPS, and backcoun
 
 ## Using it
 
-- **Main:** Up opens Season, Down opens Today, Select opens More, Back exits.
+- **Main:** Up opens Season, Down opens Today, Select opens More, Back exits. Exit the app
+  to stop tracking; reopening on the same day resumes the in-progress lift.
+- **More:** Units, Vibration, and Undo Last Lift at the bottom. Back closes the menu.
 - **Today / Season:** Up and Down move to older and newer days or seasons; the action bar
   shows plain chevrons only in the directions that exist. Select does nothing and Back
   returns to Main.
@@ -159,7 +162,7 @@ generated CommonJS copy. Watch date/season/format helpers are in
 `src/embeddedjs/lib/format.js`, and phone-side aggregation, trip maths, and summaries are in
 `src/pkjs/lib/stats.js`. `src/embeddedjs/lib/core.js` is a compatibility barrel for the
 tests; the watch no longer imports it.
-There are 95 tests, including the phone detector/store/runtime, sync/query handlers, Clay
+There are 93 tests, including the phone detector/store/runtime, sync/query handlers, Clay
 config and settings mapping, lift-resume, and coordinate cases.
 Run them with Node 22 or newer:
 
@@ -183,8 +186,8 @@ The temporary phone probe (`PHONE_PROBE`) remains available for device testing.
   and pushes it on launch, lift end, reconnect, refresh, and command. A 40-run day is about
   516 bytes.
 - The **watch** caches the last `State` in `ss.phone`, draws immediately, and sends commands
-  for pause, end/resume day, undo, units, vibration, and refresh. It no longer runs a
-  detector, day store, outbox, or GPS sensor.
+  for undo, units, and vibration. Refreshes are requested automatically on connect, focus,
+  and a stale cache. It no longer runs a detector, day store, outbox, or GPS sensor.
 - The watch asks for one day or season summary at a time with `Query`; the phone answers
   with `Data`. The watch caches only a handful of summaries and prefetches one level.
 - The phone builds the stats page locally as a `data:` URL and opens it from the Pebble

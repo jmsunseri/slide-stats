@@ -58,11 +58,11 @@ testing.
 4. On lift end, `src/pkjs/lib/phone-store.js` appends the lift to `ss.lifts`.
 5. The store builds the compact watch state with `src/pkjs/lib/stats.js`.
 6. The runtime sends `State` (and `Event` for start/end vibration).
-7. Commands from the watch update settings, pause/day state, or undo the last lift.
+7. Commands from the watch update units/vibration or undo the last lift.
 
 The in-progress lift is saved to `ss.phoneActive` every 30 seconds and on every detector
-event, so a phone restart does not lose a ride. The phone clears it when the day is paused,
-closed, rolled over, or the lift ends.
+event, so a phone restart does not lose a ride. The phone clears it when the day rolls over
+or the lift ends.
 
 `phone-store` reads `ss.lifts` on each operation, so the old watch sync path and the phone
 runtime can share the same records. If the stored JSON is corrupt, the store preserves the
@@ -78,7 +78,7 @@ raw value under `ss.lifts.corrupt` before starting from an empty map.
   `Query`/`Data` messages;
 - sends `Command` messages for menu actions;
 - vibrates on `Event`;
-- shows the paused and no-GPS indicators.
+- shows the no-GPS indicator.
 
 It no longer imports `Location`, the detector, the day store, or the outbox. The old
 `ss.state` blob is left untouched on flash so a rollback can still read it; the new watch
@@ -127,10 +127,8 @@ compatibility with the Clay page.
   "settings": {
     "units": "metric",
     "vibration": true,
-    "paused": false,
-    "closed": false,
     "seasonMode": "north",
-    "theme": { "background": 16777215, "accent": 0, "text": 0 }
+    "theme": { "background": 16777215, "accent": 170, "text": 0 }
   },
   "status": { "gps": true }
 }
@@ -151,19 +149,17 @@ The watch uses this only for vibration. The following `State` carries the new to
 ### Watch → phone `Command`
 
 ```json
-{ "type": "pause", "value": true }
-{ "type": "day", "value": true }
 { "type": "undo" }
 { "type": "units", "value": "imperial" }
 { "type": "vibration", "value": false }
 { "type": "refresh" }
 ```
 
-`refresh` is sent on connect, on a stale cache, on app focus, and from the menu's Sync Now.
-The phone replies with a fresh `State`.
+`refresh` is sent automatically on connect, on a stale cache, and on app focus. The phone
+replies with a fresh `State`.
 
-The watch updates pause/day/units/vibration locally for an immediate response and then sends
-the command. The next `State` is authoritative. Commands are held in a small in-memory queue
+The watch updates units/vibration locally for an immediate response and then sends the
+command. The next `State` is authoritative. Commands are held in a small in-memory queue
 while the AppMessage channel is busy and are not persisted across app exit; an undo is never
 replayed after a restart.
 
@@ -206,10 +202,10 @@ the watch archive. The native ActionMenu is included in the final measurement:
 
 | Metric | Before | After |
 | --- | ---: | ---: |
-| App virtual size | 628 B | **2,244 B** |
-| Archive | 35,935 B | **26,245 B** |
+| App virtual size | 628 B | **2,096 B** |
+| Archive | 35,935 B | **25,223 B** |
 | XS pools | 78,336 B | 80,384 B (slot restored to 48,640) |
-| Hardware startup margin | +1,057 B | **+9,455 B** |
+| Hardware startup margin | +1,057 B | **+10,747 B** |
 
 The 40-run limit no longer applies to the watch: a 40-run day lives on the phone and pushes the
 same ~516-byte summary as a 1-run day. The 40-run stress harness was a watch-store test and is
@@ -234,13 +230,13 @@ The custom Poco menu was removed, including its menu drawing, scrolling, and inp
 
 ## Verification
 
-- `node --test test/*.test.mjs` → **95/95 pass**.
+- `node --test test/*.test.mjs` → **93/93 pass**.
 - `npm run check-memory` → **OK** on emery and gabbro.
 - Emulator smoke test:
   - app launches and draws the main screen;
   - phone `State` shows runs/vertical and the no-GPS indicator;
   - Today and Season detail screens show the pushed state;
-  - Units, End/Resume Day, Pause, and Vibration reach PKJS and persist in `ss.settings`;
+  - Units and Vibration reach PKJS and persist in `ss.settings`;
   - yesterday navigation issues `Query` and receives `Data`;
   - the native ActionMenu opens, scrolls, enters both submenus, cancels with Back, and
     restores the app on Emery and Gabbro.

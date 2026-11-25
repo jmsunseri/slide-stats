@@ -28,8 +28,6 @@ const MESSAGE_KEYS = ["Sync", "Ack", "Settings", "Query", "Data", "Purge", "Stat
 const DISPLAY_DEFAULTS = {
 	units: "metric",
 	vibration: true,
-	paused: false,
-	closed: false,
 	seasonMode: "north",
 	// Pebble's second-darkest blue: GColorDukeBlue (#0000AA).
 	theme: { background: 0xffffff, accent: 0x0000aa, text: 0x000000 },
@@ -119,11 +117,6 @@ function drawRight(text, font, right, y) {
 	render.drawText(text, font, textColor, right - render.getTextWidth(text, font), y);
 }
 
-function drawPause(x, y) {
-	render.fillRectangle(textColor, x, y, 4, 14);
-	render.fillRectangle(textColor, x + 8, y, 4, 14);
-}
-
 function drawNoGps(x, y) {
 	const cx = x + 8;
 	const cy = y + 8;
@@ -193,19 +186,10 @@ function drawPeaks(cx, baseY, height) {
 }
 
 function drawStatusIcons() {
-	const gps = !settings.paused && !isDayClosed() && statusNoGps;
-	if (!settings.paused && !gps)
+	if (!statusNoGps)
 		return;
 	const y = H - (ROUND ? 42 : 32);
-	const x = CONTENT_CENTER - 8;
-	if (settings.paused)
-		drawPause(x, y);
-	else
-		drawNoGps(x, y);
-}
-
-function isDayClosed() {
-	return !!settings.closed;
+	drawNoGps(CONTENT_CENTER - 8, y);
 }
 
 function todayKey() {
@@ -397,11 +381,6 @@ function drawBarChevron(cx, cy, up) {
 	}
 }
 
-function drawBarCheck(cx, cy) {
-	drawBarLine(cx - 5, cy, cx - 1, cy + 4);
-	drawBarLine(cx - 1, cy + 4, cx + 5, cy - 4);
-}
-
 function drawBarIcon(name, cx, cy) {
 	if (!name)
 		return;
@@ -417,8 +396,6 @@ function drawBarIcon(name, cx, cy) {
 		drawBarChevron(cx, cy, true);
 	else if (name === "down")
 		drawBarChevron(cx, cy, false);
-	else if (name === "check")
-		drawBarCheck(cx, cy);
 }
 
 function drawActionBar() {
@@ -480,8 +457,6 @@ function applyPhoneSettings(source) {
 	settings = {
 		units: source.units === "imperial" ? "imperial" : "metric",
 		vibration: source.vibration !== false,
-		paused: !!source.paused,
-		closed: !!source.closed,
 		seasonMode: source.seasonMode === "south" ? "south" : "north",
 		theme,
 	};
@@ -837,22 +812,6 @@ function applySettings(raw) {
 /* Actions                                                             */
 /* ------------------------------------------------------------------ */
 
-function setPaused(paused) {
-	if (settings.paused === paused)
-		return;
-	updateLocalSettings({ paused });
-	sendCommand({ type: "pause", value: paused });
-	draw();
-}
-
-function setClosed(closed) {
-	if (settings.closed === closed)
-		return;
-	updateLocalSettings({ closed });
-	sendCommand({ type: "day", value: closed });
-	draw();
-}
-
 function undoLastLift() {
 	sendCommand({ type: "undo" });
 }
@@ -875,28 +834,15 @@ function setVibration(vibration) {
 
 // Keep in sync with the ACTION enum in src/c/ffi.c.
 const ACTION = {
-	dayClose: 1,
-	dayOpen: 2,
-	pause: 3,
-	resume: 4,
-	undo: 5,
-	metric: 6,
-	imperial: 7,
-	vibrationOn: 8,
-	vibrationOff: 9,
-	sync: 10,
+	undo: 1,
+	metric: 2,
+	imperial: 3,
+	vibrationOn: 4,
+	vibrationOff: 5,
 };
 
 function handleAction(action) {
-	if (action === ACTION.dayClose)
-		setClosed(true);
-	else if (action === ACTION.dayOpen)
-		setClosed(false);
-	else if (action === ACTION.pause)
-		setPaused(true);
-	else if (action === ACTION.resume)
-		setPaused(false);
-	else if (action === ACTION.undo)
+	if (action === ACTION.undo)
 		undoLastLift();
 	else if (action === ACTION.metric)
 		setUnits("metric");
@@ -906,8 +852,6 @@ function handleAction(action) {
 		setVibration(true);
 	else if (action === ACTION.vibrationOff)
 		setVibration(false);
-	else if (action === ACTION.sync)
-		requestRefresh(true);
 }
 
 function nativeMenu() {
@@ -962,10 +906,8 @@ function openActionMenu() {
 		clearTimeout(menuRedrawTimer);
 		menuRedrawTimer = null;
 	}
-	const flags = (isDayClosed() ? 1 : 0) |
-		(settings.paused ? 2 : 0) |
-		(settings.units === "imperial" ? 4 : 0) |
-		(settings.vibration ? 0 : 8);
+	const flags = (settings.units === "imperial" ? 1 : 0) |
+		(settings.vibration ? 0 : 2);
 	const accent = settings.theme && typeof settings.theme.accent === "number"
 		? settings.theme.accent : 0;
 	try {

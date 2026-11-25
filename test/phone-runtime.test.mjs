@@ -34,17 +34,13 @@ test("phone runtime records a synthetic lift and emits watch state", () => {
 	const clock = { value: new Date(2026, 2, 14, 9, 0).getTime() };
 	const states = [];
 	const events = [];
-	let saved = null;
 	const runtime = createPhoneRuntime({
 		storage,
 		loadSettings: () => Object.assign({}, DEFAULT_SETTINGS, { sampleIntervalMs: 1000 }),
-		saveSettings: settings => { saved = settings; },
 		onState: state => states.push(state),
 		onEvent: event => events.push(event),
 		geolocation: null,
 		now: () => clock.value,
-		setInterval: () => 1,
-		clearInterval: () => {},
 	});
 
 	for (let second = 0; second <= 30; second++)
@@ -62,9 +58,9 @@ test("phone runtime records a synthetic lift and emits watch state", () => {
 	assert.equal(runtime.getStore().getLifts()["2026-03-14"].length, 1);
 });
 
-test("phone runtime applies commands and pushes updated state", () => {
+test("phone runtime applies settings commands and pushes updated state", () => {
 	const storage = memoryStorage();
-	let now = new Date(2026, 2, 14, 9, 0).getTime();
+	const clock = { value: new Date(2026, 2, 14, 9, 0).getTime() };
 	const states = [];
 	let saved = null;
 	const runtime = createPhoneRuntime({
@@ -74,38 +70,28 @@ test("phone runtime applies commands and pushes updated state", () => {
 		onState: state => states.push(state),
 		onEvent: () => {},
 		geolocation: null,
-		now: () => now,
-		setInterval: () => 1,
-		clearInterval: () => {},
+		now: () => clock.value,
 	});
 
 	runtime.handleCommand({ type: "units", value: "imperial" });
-	assert.equal(states[states.length - 1].settings.units, "imperial");
+	assert.equal(states.at(-1).settings.units, "imperial");
 	assert.equal(saved.units, "imperial");
 
-	runtime.handleCommand({ type: "pause", value: true });
-	assert.equal(states[states.length - 1].settings.paused, true);
-	assert.equal(saved.paused, true);
-
-	runtime.handleCommand({ type: "pause", value: false });
-	runtime.handleCommand({ type: "day", value: true });
-	assert.equal(states[states.length - 1].settings.closed, true);
-	runtime.handleCommand({ type: "day", value: false });
-	assert.equal(states[states.length - 1].settings.closed, false);
+	runtime.handleCommand({ type: "vibration", value: false });
+	assert.equal(states.at(-1).settings.vibration, false);
+	assert.equal(saved.vibration, false);
 
 	runtime.handleCommand({ type: "refresh" });
-	assert.ok(states.length >= 5);
+	assert.ok(states.length >= 3);
 });
 
 test("phone runtime sends an initial state and rolls the day over", () => {
 	const storage = memoryStorage();
 	const clock = { value: new Date(2026, 2, 14, 9, 0).getTime() };
 	const states = [];
-	let saved = null;
 	const runtime = createPhoneRuntime({
 		storage,
 		loadSettings: () => DEFAULT_SETTINGS,
-		saveSettings: settings => { saved = settings; },
 		onState: state => states.push(state),
 		onEvent: () => {},
 		geolocation: null,
@@ -117,89 +103,34 @@ test("phone runtime sends an initial state and rolls the day over", () => {
 	assert.equal(states[0].today.date, "2026-03-14");
 	assert.equal(states[0].status.gps, false);
 
-	runtime.handleCommand({ type: "day", value: true });
-	assert.equal(states.at(-1).settings.closed, true);
-	assert.equal(saved.closedDate, "2026-03-14");
-
 	clock.value = new Date(2026, 2, 15, 9, 0).getTime();
 	runtime.sendState();
 	assert.equal(states.at(-1).today.date, "2026-03-15");
-	assert.equal(states.at(-1).settings.closed, false);
-	assert.equal(saved.closed, false);
+	assert.equal(states.at(-1).today.runs, 0);
 });
 
-test("a new day resumes tracking after an ended day", () => {
+test("a day rollover clears an in-progress lift", () => {
 	const storage = memoryStorage();
-	const clock = { value: new Date(2026, 2, 14, 9, 0).getTime() };
-	let watches = 0;
-	let cleared = 0;
-	const geolocation = {
-		watchPosition: () => ++watches,
-		clearWatch: () => { cleared++; },
-	};
+	const clock = { value: new Date(2026, 2, 14, 23, 58).getTime() };
+	const states = [];
 	const runtime = createPhoneRuntime({
 		storage,
-		loadSettings: () => DEFAULT_SETTINGS,
-		onState: () => {},
+		loadSettings: () => Object.assign({}, DEFAULT_SETTINGS, { sampleIntervalMs: 1000 }),
+		onState: state => states.push(state),
 		onEvent: () => {},
-		geolocation,
+		geolocation: null,
 		now: () => clock.value,
 	});
 
-	runtime.start();
-	assert.equal(watches, 1);
-	runtime.handleCommand({ type: "day", value: true });
-	assert.equal(cleared, 1);
+	for (let second = 0; second < 20; second++)
+		feed(runtime, clock, 2000 + second);
+	assert.ok(states.length > 0);
 
-	clock.value = new Date(2026, 2, 15, 9, 0).getTime();
+	clock.value = new Date(2026, 2, 15, 0, 1).getTime();
 	runtime.sendState();
-	assert.equal(watches, 2);
-});
-
-test("a settings update does not reopen a closed day", () => {
-	const storage = memoryStorage();
-	const clock = { value: new Date(2026, 2, 14, 9, 0).getTime() };
-	const states = [];
-	const runtime = createPhoneRuntime({
-		storage,
-		loadSettings: () => DEFAULT_SETTINGS,
-		onState: state => states.push(state),
-		onEvent: () => {},
-		geolocation: null,
-		now: () => clock.value,
-	});
-
-	runtime.start();
-	runtime.handleCommand({ type: "day", value: true });
-	assert.equal(states.at(-1).settings.closed, true);
-
-	runtime.applySettings({ units: "imperial" });
-	assert.equal(states.at(-1).settings.units, "imperial");
-	assert.equal(states.at(-1).settings.closed, true);
-});
-
-test("phone runtime clears a stale closed day when it starts", () => {
-	const storage = memoryStorage();
-	const clock = { value: new Date(2026, 2, 15, 9, 0).getTime() };
-	const states = [];
-	let saved = null;
-	const runtime = createPhoneRuntime({
-		storage,
-		loadSettings: () => Object.assign({}, DEFAULT_SETTINGS, {
-			closed: true,
-			closedDate: "2026-03-14",
-		}),
-		saveSettings: settings => { saved = settings; },
-		onState: state => states.push(state),
-		onEvent: () => {},
-		geolocation: null,
-		now: () => clock.value,
-	});
-
-	runtime.start();
-	assert.equal(saved.closed, false);
-	assert.equal(saved.closedDate, null);
-	assert.equal(states.at(-1).settings.closed, false);
+	assert.equal(states.at(-1).today.date, "2026-03-15");
+	assert.equal(states.at(-1).today.runs, 0);
+	assert.equal(runtime.getStore().getLifts()["2026-03-14"], undefined);
 });
 
 test("phone runtime undo removes the newest lift for today", () => {

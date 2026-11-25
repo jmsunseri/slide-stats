@@ -150,8 +150,6 @@ function createPhoneStore(options = {}) {
 			settings: {
 				units: settings.units === "imperial" ? "imperial" : "metric",
 				vibration: settings.vibration !== false,
-				paused: !!settings.paused,
-				closed: !!settings.closed,
 				seasonMode: settings.seasonMode === "south" ? "south" : "north",
 				theme: settings.theme,
 			},

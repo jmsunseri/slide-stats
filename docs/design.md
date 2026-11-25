@@ -16,8 +16,8 @@ still needs a decision.
 - Alloy apps only run while open. Wakeups relaunch the app but cannot track continuously.
   The app must stay open during a ski day.
 - PKJS starts when the watch app starts and stops when it exits. On iOS the phone app is
-  suspended in the background and timers do not fire. Sync must happen during the day,
-  not only on exit.
+  suspended in the background and timers do not fire. Detection and storage must happen
+  during the day, not only on exit.
 - PKJS `localStorage` is per-app, durable, and survives app restarts.
 - The only phone UI available to a watchapp is the config-page WebView, opened from the
   gear icon in the Pebble app. PKJS can generate it as a `data:` URL, so the Clay page can
@@ -48,9 +48,9 @@ still needs a decision.
 - **Resuming a ride:** the phone persists the active lift (start and peak) in
   `ss.phoneActive` every 30 seconds and on every detector event. On launch it is restored
   into the phone detector, so returning mid-climb continues the same ride, and returning
-  on the descent ends it. The state is discarded on a new day, pause, or end day. A long
-  GPS gap keeps the active lift and lets the next samples extend or end it. Coordinates,
-  when available, are part of the saved state.
+  on the descent ends it. The state is discarded on a new day. A long GPS gap keeps the
+  active lift and lets the next samples extend or end it. Coordinates, when available, are
+  part of the saved state.
 - **Lift coordinates:** the phone detector keeps each sampled latitude/longitude in its
   ascent window, so a finished lift carries the bottom (lowest sample) and peak (descent
   start) coordinates. `phone-store` writes a compact `pts` array (start lat, start lon,
@@ -78,10 +78,10 @@ still needs a decision.
   thresholds are edited in metric units; the units setting changes the stats. A
   top-of-page reminder tells people to start the watch app before heading uphill; starting
   at the top loses the ascent.
-- **Settings split:** quick items on the watch (pause, end day, undo last lift, units,
-  vibration, sync now) become `Command` messages; theme, hemisphere, altitude processing
-  interval, detection thresholds, trips toggle, and the Clay page live on the phone. The
-  phone pushes the display settings back inside `State`.
+- **Settings split:** quick items on the watch (undo last lift, units, vibration) become
+  `Command` messages; theme, hemisphere, altitude processing interval, detection
+  thresholds, trips toggle, and the Clay page live on the phone. The phone pushes the
+  display settings back inside `State`.
 
 ## Main screen
 
@@ -114,8 +114,8 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - No current altitude and no base altitude anywhere.
 - Runs and day vertical directly below the time (Gothic-Bold 24, falling back to 18 if a
   large imperial value would not fit).
-- Only two exception icons: pause bars when paused, crossed circle when GPS/altitude is
-  missing. No text status, no lift icon, no always-on indicator.
+- Only one exception icon: a crossed circle when GPS/altitude is missing. No text status,
+  no lift icon, no always-on indicator.
 - Time redraws on `minutechange`; totals on lift end; icons only on state change. The
   detail screens do not redraw on every minute. No animations, no forced backlight.
 
@@ -143,17 +143,17 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 
 ## Screens and input
 
-- **Main** — clock, runs and day vertical, pause/no-GPS icons.
+- **Main** — clock, runs and day vertical, no-GPS icon.
 - **Today** — vertical, runs, first/last lift, average per run, longest run. Today's values
   come from the phone's `State`; past days are summaries fetched from the phone.
 - **Season** — label, days, vertical, runs, average/day, best day, fetched from the phone
   so all watches share one combined history.
 - **Titles:** `TODAY`, `YESTERDAY`, or `MMM DD` for a day; the season label for a season.
   Vertical values are unsigned; there is no leading `+`.
-- **More** (Select from Main only) — End/Resume Day, Pause/Resume, Undo Last Lift, Units,
-  Vibration, Sync Now. Uses Pebble's native ActionMenu with Units and Vibration submenus.
-  The left crumb column follows the theme accent; the body uses the system black/white
-  style. The watch polls the FFI result and redraws after the menu closes.
+- **More** (Select from Main only) — Units, Vibration, and Undo Last Lift at the bottom.
+  Uses Pebble's native ActionMenu with Units and Vibration submenus. The destructive Undo
+  sits last. The left crumb column follows the theme accent; the body uses the system
+  black/white style. The watch polls the FFI result and redraws after the menu closes.
 - **About screen removed.** Version/platform information lives in the README and appstore
   listing instead.
 - **Action bar:** exact native geometry (34 px Emery / 40 px Gabbro, 45/80 px icon
@@ -205,9 +205,9 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - History protocol: `Query` carries `{ kind, key }`; `Data` returns the same key plus the
   day or season summary and its `older`/`newer` neighbours. The watch caps its summary
   cache, prefetches one level, and drops the queue on suspend.
-- Command protocol: the watch sends `{ type, value }` for pause, day, undo, units,
-  vibration, and refresh. It updates display state optimistically; the next `State` is
-  authoritative. Commands have no acknowledgement and are not persisted across app exit.
+- Command protocol: the watch sends `{ type, value }` for undo, units, vibration, and
+  refresh. It updates display state optimistically; the next `State` is authoritative.
+  Commands have no acknowledgement and are not persisted across app exit.
 - Display settings travel inside `State`. The legacy `Settings` key is still accepted from
   older watch builds. The watch's quick settings changes use `Command` instead.
 - The Clay page is generated by PKJS as a self-contained `data:` URL. Clay's automatic
@@ -229,8 +229,8 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - The detail screens scale from the watch's Text Size preference. A tiny FFI shim
   (`src/c/ffi.c`) exposes `preferred_content_size()` to JavaScript; the hero time stays
   fixed at maximum size. The native ActionMenu uses the firmware's own font.
-- There is no base/started flag: the day is tracked whenever the app is open and not
-  paused or ended. End Day is explicit and survives relaunch; a new date starts fresh.
+- There is no base/started flag: the day is tracked whenever the app is open. Exit the app
+  to stop; reopening on the same day resumes the active lift. A new date starts fresh.
 - The app icon is a white rounded tile with two offset black peaks and a white snow cap on
   the taller left peak. The peaks run into the lower border and are clipped to the rounded
   badge, so there is no white strip between the mountains and the border. The launcher icon
@@ -249,7 +249,7 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 ## Implementation status
 
 - [x] Alloy project scaffolded for emery + gabbro
-- [x] Phone detector/store/runtime and watch state cache with 95 Node tests
+- [x] Phone detector/store/runtime and watch state cache with 93 Node tests
 - [x] Poco screens, native action bar, native ActionMenu, and icon-only status
 - [x] Text Size/ContentSize FFI for the detail fonts
 - [x] Two-peak app icon (launcher + store) and four-peak main-face mark
@@ -275,5 +275,5 @@ Centred vertical stack, no decoration, with the native action bar on the right:
   behavior. `phone-store` keys records by `endTime`.
 - The watch keeps the live `State` plus a small `Query`/`Data` cache. Past days and other
   seasons are fetched on demand; no season history is stored on the watch.
-- Command delivery is best-effort. The next `State` corrects pause/day/units/vibration;
-  Undo is not replayed after a restart.
+- Command delivery is best-effort. The next `State` corrects units/vibration; Undo is not
+  replayed after a restart.

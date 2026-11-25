@@ -225,7 +225,6 @@ test("flattenSettings maps nested settings to Clay values", () => {
 
 test("applyClaySettings rebuilds the nested settings and converts units", () => {
 	const current = Object.assign({}, DEFAULT_SETTINGS, {
-		paused: true,
 		detection: Object.assign({}, DEFAULT_SETTINGS.detection, {
 			fastGainM: 12,
 			slowGainM: 9,
@@ -256,7 +255,7 @@ test("applyClaySettings rebuilds the nested settings and converts units", () => 
 	assert.equal(settings.detection.slowWindowMs, 90000);
 	assert.equal(settings.detection.fastGainM, 12);
 	assert.equal(settings.detection.slowGainM, 9);
-	assert.equal(settings.paused, true);
+	assert.equal(settings.paused, undefined);
 	assert.equal(settings.theme.background, 0x0055aa);
 	assert.equal(settings.theme.accent, 0xffaa00);
 	assert.equal(settings.theme.text, 0xffffff);
@@ -280,14 +279,13 @@ test("applyClaySettings clamps bad values and preserves missing ones", () => {
 
 	const preserved = applyClaySettings({}, {
 		units: "imperial",
-		paused: true,
 		sampleIntervalMs: 20000,
 		seasonMode: "south",
 		theme: { background: 0x0055aa, accent: 0xffaa00, text: 0xffffff },
 		detection: Object.assign({}, DEFAULT_SETTINGS.detection, { fastGainM: 12 }),
 	});
 	assert.equal(preserved.units, "imperial");
-	assert.equal(preserved.paused, true);
+	assert.equal(preserved.paused, undefined);
 	assert.equal(preserved.sampleIntervalMs, 20000);
 	assert.equal(preserved.seasonMode, "south");
 	assert.equal(preserved.theme.background, 0x0055aa);
