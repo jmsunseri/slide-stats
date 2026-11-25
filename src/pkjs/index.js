@@ -250,3 +250,15 @@ Pebble.addEventListener("webviewclosed", function (event) {
 	Pebble.sendAppMessage({ Settings: JSON.stringify(settings) });
 	purgeSnapshot = {};
 });
+
+// Phone-authoritative probe. Disabled by default; set PHONE_PROBE to true
+// when testing geolocation and the shared detector on a device.
+const PHONE_PROBE = false;
+if (PHONE_PROBE) {
+	try {
+		require("./probe").start();
+	}
+	catch (error) {
+		console.log("phone-probe: load failed " + error);
+	}
+}
