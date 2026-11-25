@@ -253,7 +253,7 @@ Pebble.addEventListener("webviewclosed", function (event) {
 
 // Phone-authoritative probe. Disabled by default; set PHONE_PROBE to true
 // when testing geolocation and the shared detector on a device.
-const PHONE_PROBE = false;
+const PHONE_PROBE = true;
 if (PHONE_PROBE) {
 	try {
 		require("./probe").start();
