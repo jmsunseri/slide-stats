@@ -25,9 +25,9 @@ const storage = {
 let store = Core.createDayStore({ storage }).load();
 let settings = store.getSettings();
 let detector = Core.createLiftDetector(settings.detection);
-const savedToday = store.getToday();
-if (savedToday && savedToday.active)
-	detector.restore(savedToday.active);
+const savedActive = store.getActiveLift();
+if (savedActive)
+	detector.restore(savedActive);
 let location = null;
 let message = null;
 let messageReady = false;
@@ -518,14 +518,15 @@ function menuLabel(id) {
 /* Navigation                                                          */
 /* ------------------------------------------------------------------ */
 
-function updateAll() {
-	settings = store.getSettings();
+function updateAll(nextSettings) {
+	settings = nextSettings || store.getSettings();
 	draw();
 }
 
 function showScreen(name) {
 	currentScreen = name;
 	menuOpen = false;
+	queryQueue.length = 0;
 	if (name === "today") {
 		selectedDayKey = todayKey();
 		queueSummary("day", selectedDayKey);
@@ -632,7 +633,7 @@ function handleEvents(events) {
 			console.log("slide-stats: lift end " + Math.round(event.lift.gain) + " m");
 			vibrate("end");
 			lastProcessed = 0;
-			updateAll();
+			updateAll(settings);
 			flushOutbox();
 		}
 	}
@@ -681,13 +682,13 @@ function setupMessage() {
 			onWritable() {
 				messageReady = true;
 				flushOutbox();
+				ensureScreenSummary();
 				flushQuery();
 			},
 			onSuspend() {
 				messageReady = false;
 				sendingLift = false;
-				if (querying && activeQuery)
-					queryQueue.unshift(activeQuery);
+				queryQueue.length = 0;
 				querying = false;
 				activeQuery = null;
 				if (queryTimer) {
@@ -723,10 +724,9 @@ function handleAck(payload) {
 function flushOutbox() {
 	if (!message || !messageReady || sendingLift)
 		return;
-	const queue = store.getOutbox();
-	if (!queue.length)
+	const record = store.peekOutbox();
+	if (!record)
 		return;
-	const record = queue[0];
 	sendingLift = true;
 	try {
 		message.write(new Map([["Sync", JSON.stringify(record)]]));
@@ -751,8 +751,17 @@ function queueSummary(kind, key) {
 		if (item.kind === kind && item.key === key)
 			return;
 	}
+	if (queryQueue.length >= 6)
+		return;
 	queryQueue.push({ kind, key });
 	flushQuery();
+}
+
+function ensureScreenSummary() {
+	if (currentScreen === "today" && selectedDayKey && !history.day[selectedDayKey])
+		queueSummary("day", selectedDayKey);
+	else if (currentScreen === "season" && selectedSeasonKey && !history.season[selectedSeasonKey])
+		queueSummary("season", selectedSeasonKey);
 }
 
 function prefetch(kind, summary) {
@@ -816,7 +825,7 @@ function handlePurge(raw) {
 	if (store.purgeDay(data.date)) {
 		detector.reset();
 		lastProcessed = 0;
-		updateAll();
+		updateAll(settings);
 	}
 }
 
@@ -847,11 +856,11 @@ function handleData(raw) {
 	flushQuery();
 }
 
-function sendSettings() {
+function sendSettings(nextSettings) {
 	if (!message || !messageReady)
 		return;
 	try {
-		message.write(new Map([["Settings", JSON.stringify(store.getSettings())]]));
+		message.write(new Map([["Settings", JSON.stringify(nextSettings || store.getSettings())]]));
 	}
 	catch (error) {
 		console.log("slide-stats: settings write failed: " + error);
@@ -861,12 +870,12 @@ function sendSettings() {
 function applySettings(json) {
 	try {
 		const next = JSON.parse(json);
-		store.setSettings(next);
-		settings = store.getSettings();
+		settings = store.setSettings(next);
 		updateTheme();
 		detector.setOptions(settings.detection);
 		history.day = {};
 		history.season = {};
+		queryQueue.length = 0;
 		if (currentScreen === "season") {
 			selectedSeasonKey = currentSeason();
 			queueSummary("season", selectedSeasonKey);
@@ -881,7 +890,7 @@ function applySettings(json) {
 		}
 		else
 			startGps();
-		updateAll();
+		updateAll(settings);
 	}
 	catch (error) {
 		console.log("slide-stats: bad settings: " + error);
@@ -893,10 +902,9 @@ function applySettings(json) {
 /* ------------------------------------------------------------------ */
 
 function togglePause() {
-	const paused = !store.getSettings().paused;
-	store.setPaused(paused);
-	settings = store.getSettings();
-	sendSettings();
+	const paused = !settings.paused;
+	settings = store.setPaused(paused);
+	sendSettings(settings);
 	if (paused) {
 		detector.reset();
 		store.setActiveLift(null);
@@ -906,7 +914,7 @@ function togglePause() {
 		lastProcessed = 0;
 		startGps();
 	}
-	updateAll();
+	updateAll(settings);
 }
 
 function toggleDay() {
@@ -920,29 +928,28 @@ function toggleDay() {
 		detector.reset();
 		stopGps();
 	}
-	updateAll();
+	updateAll(settings);
 }
 
 function undoLastLift() {
 	const removed = store.undoLastLift();
 	if (removed) {
-		updateAll();
+		updateAll(settings);
 		flushOutbox();
 	}
 }
 
 function toggleUnits() {
-	store.setSettings({ units: store.getSettings().units === "metric" ? "imperial" : "metric" });
-	settings = store.getSettings();
-	sendSettings();
-	updateAll();
+	const units = settings.units === "metric" ? "imperial" : "metric";
+	settings = store.setSettings({ units });
+	sendSettings(settings);
+	updateAll(settings);
 }
 
 function toggleVibration() {
-	store.setSettings({ vibration: !store.getSettings().vibration });
-	settings = store.getSettings();
-	sendSettings();
-	updateAll();
+	settings = store.setSettings({ vibration: !settings.vibration });
+	sendSettings(settings);
+	updateAll(settings);
 }
 
 function activateMenu() {
@@ -984,6 +991,7 @@ function exitApp() {
 		catch (error) {}
 		message = null;
 	}
+	store.save();
 	watch.exit();
 }
 
@@ -1096,13 +1104,15 @@ watch.addEventListener("daychange", () => {
 		detector.reset();
 		store.setActiveLift(null);
 		lastProcessed = 0;
-		updateAll();
+		updateAll(settings);
 	}
 });
 
 watch.addEventListener("didFocus", inFocus => {
-	if (inFocus)
-		updateAll();
+	if (inFocus) {
+		ensureScreenSummary();
+		updateAll(settings);
+	}
 });
 
 /* ------------------------------------------------------------------ */
@@ -1111,7 +1121,7 @@ watch.addEventListener("didFocus", inFocus => {
 
 updateTheme();
 setupMessage();
-updateAll();
+updateAll(settings);
 
 if (!settings.paused && !isDayClosed())
 	startGps();

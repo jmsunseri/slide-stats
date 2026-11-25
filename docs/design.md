@@ -230,6 +230,10 @@ Centred vertical stack, no decoration, with the native action bar on the right:
 - Theme colours travel as packed numbers, and the phone snaps picks to the watch palette
   before sending them. The watch reuses its existing white/black colours for the default
   theme to avoid allocating duplicates.
+- Memory budget: `npm run check-memory` (or `node tools/memory-budget.mjs --check`) models the
+  hardware startup allocation: XS pools, resident archive, and mapper tables. The emulator
+  maps the archive in place, so a successful emulator boot does not prove the hardware margin.
+  See `docs/memory-plan.md` for the calibration and current headroom.
 
 ## Implementation status
 

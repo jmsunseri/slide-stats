@@ -84,7 +84,6 @@ function createLiftDetector(options = {}) {
 	let endCount = 0;
 	let lastSeenTime = null;
 	let lastAcceptedTime = null;
-	let lastAltitude = null;
 
 	function reset() {
 		phase = "idle";
@@ -94,7 +93,6 @@ function createLiftDetector(options = {}) {
 		endCount = 0;
 		lastSeenTime = null;
 		lastAcceptedTime = null;
-		lastAltitude = null;
 	}
 
 	function setOptions(next = {}) {
@@ -293,7 +291,6 @@ function createLiftDetector(options = {}) {
 			return events;
 
 		lastAcceptedTime = now;
-		lastAltitude = altitude;
 
 		rawAltitudes.push(altitude);
 		if (rawAltitudes.length > config.medianSamples)
@@ -342,9 +339,6 @@ function createLiftDetector(options = {}) {
  * A season is a 12-month window identified by its start year. The northern
  * preset starts on 1 September; the southern preset starts on 1 March.
  */
-
-const NORTH = { mode: "north", month: 9, day: 1 };
-const SOUTH = { mode: "south", month: 3, day: 1 };
 
 function pad2(value) {
 	return value < 10 ? "0" + value : "" + value;
@@ -401,6 +395,7 @@ function currentSeasonKey(now, settings = {}) {
 
 const STATE_KEY = "ss.state";
 const STATE_VERSION = 1;
+const ACTIVE_SAVE_INTERVAL_MS = 30000;
 
 const DEFAULT_SETTINGS = {
 	units: "metric",
@@ -422,6 +417,7 @@ const DEFAULT_SETTINGS = {
 function clone(value) {
 	return JSON.parse(JSON.stringify(value));
 }
+
 
 function mergeSettings(base, patch) {
 	const result = Object.assign({}, base, patch);
@@ -462,6 +458,7 @@ function createDayStore(options = {}) {
 	let today = null;
 	let outbox = [];
 	let nextSeq = 1;
+	let activeSavedAt = 0;
 
 	function save() {
 		if (!storage)
@@ -594,13 +591,16 @@ function createDayStore(options = {}) {
 	function setSettings(patch) {
 		settings = mergeSettings(settings, patch || {});
 		save();
+		return clone(settings);
 	}
 
 	function setPaused(paused) {
 		settings.paused = !!paused;
-		if (settings.paused && today)
+		if (settings.paused && today) {
 			today.active = null;
+			}
 		save();
+		return clone(settings);
 	}
 
 	function ack(id) {
@@ -614,7 +614,16 @@ function createDayStore(options = {}) {
 		if (!lift && !today.active)
 			return;
 		today.active = lift;
-		save();
+		if (!lift) {
+			activeSavedAt = 0;
+			save();
+			return;
+		}
+		const at = now();
+		if (at - activeSavedAt >= ACTIVE_SAVE_INTERVAL_MS) {
+			save();
+			activeSavedAt = at;
+		}
 	}
 
 	function isTracking() {
@@ -670,8 +679,9 @@ function createDayStore(options = {}) {
 		setActiveLift,
 		getSettings: () => clone(settings),
 		getToday: () => (today ? clone(today) : null),
+		getActiveLift: () => (today && today.active ? clone(today.active) : null),
 		getOutbox: () => clone(outbox),
-		getNextSeq: () => nextSeq,
+		peekOutbox: () => (outbox.length ? clone(outbox[0]) : null),
 	};
 
 	return self;

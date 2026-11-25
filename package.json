@@ -6,6 +6,9 @@
     "pebble-app"
   ],
   "private": false,
+  "scripts": {
+    "check-memory": "node tools/memory-budget.mjs --check"
+  },
   "dependencies": {
     "@moddable/pebbleproxy": "^0.2.2",
     "@rebble/clay": "^1.1.0"

@@ -234,3 +234,48 @@ test("purging today clears lifts, active state, closed state, and outbox", () =>
 	assert.equal(store.purgeDay(store.todayDate()), true);
 	assert.equal(store.isClosed(), false);
 });
+
+test("getActiveLift returns only the active snapshot and isolates it", () => {
+	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
+	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
+
+	assert.equal(store.getActiveLift(), null);
+
+	store.addLift(lift(400, 1000, 5000));
+	store.setActiveLift([0, 2000, 300000, 2600]);
+
+	const active = store.getActiveLift();
+	assert.deepEqual(active, [0, 2000, 300000, 2600]);
+	active[0] = 99;
+	assert.deepEqual(store.getActiveLift(), [0, 2000, 300000, 2600]);
+});
+
+test("peekOutbox returns the head without cloning the whole queue", () => {
+	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
+	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
+
+	assert.equal(store.peekOutbox(), null);
+
+	store.addLift(lift(400, 1000, 5000));
+	store.addLift(lift(300, 6000, 9000));
+
+	const head = store.peekOutbox();
+	assert.deepEqual(head, store.getOutbox()[0]);
+	head.gain = 999;
+	assert.equal(store.peekOutbox().gain, 400);
+});
+
+test("setSettings and setPaused return isolated updated settings", () => {
+	const clock = fakeClock(new Date(2026, 2, 14, 9, 0).getTime());
+	const store = createDayStore({ storage: memoryStorage(), now: clock.now }).load();
+
+	const updated = store.setSettings({ units: "imperial" });
+	assert.equal(updated.units, "imperial");
+	updated.units = "metric";
+	assert.equal(store.getSettings().units, "imperial");
+
+	const paused = store.setPaused(true);
+	assert.equal(paused.paused, true);
+	paused.paused = false;
+	assert.equal(store.getSettings().paused, true);
+});
