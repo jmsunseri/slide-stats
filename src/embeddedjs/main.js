@@ -1,10 +1,9 @@
 import Poco from "commodetto/Poco";
 import Button from "pebble/button";
 import Vibes from "pebble/vibes";
-import Location from "embedded:sensor/Location";
 import Message from "pebble/message";
 
-import * as Core from "core";
+import * as Fmt from "format";
 
 
 // The system Text Size preference. The FFI shim returns 0..3; default to Large.
@@ -20,25 +19,35 @@ catch (error) {
 const storage = {
 	getItem: key => localStorage.getItem(key),
 	setItem: (key, value) => localStorage.setItem(key, value),
+	removeItem: key => localStorage.removeItem(key),
 };
 
-let store = Core.createDayStore({ storage }).load();
-let settings = store.getSettings();
-let detector = Core.createLiftDetector(settings.detection);
-const savedActive = store.getActiveLift();
-if (savedActive)
-	detector.restore(savedActive);
-let location = null;
+const PHONE_KEY = "ss.phone";
+const MESSAGE_KEYS = ["Sync", "Ack", "Settings", "Query", "Data", "Purge", "State", "Command", "Event"];
+
+const DISPLAY_DEFAULTS = {
+	units: "metric",
+	vibration: true,
+	paused: false,
+	closed: false,
+	seasonMode: "north",
+	// Pebble's second-darkest blue: GColorDukeBlue (#0000AA).
+	theme: { background: 0xffffff, accent: 0x0000aa, text: 0x000000 },
+};
+
+let phoneState = null;
+let settings = Object.assign({}, DISPLAY_DEFAULTS);
+let statusNoGps = true;
+
 let message = null;
 let messageReady = false;
-let sendingLift = false;
-let ackTimer = null;
-let statusNoGps = false;
-let lastProcessed = 0;
+let commandQueue = [];
+let lastRefreshAt = 0;
 
-let menuOpen = false;
-let menuIndex = 0;
-let menuScroll = 0;
+let actionMenu = false;
+let actionMenuTimer = null;
+let menuRedrawTimer = null;
+let lastMenuCloseAt = 0;
 let currentScreen = "main";
 let frameDay = null;
 let frameSeason = null;
@@ -89,8 +98,6 @@ const CONTENT_W = ROUND ? W : W - BAR_W;
 const CONTENT_CENTER = ROUND ? (W >> 1) : (CONTENT_W >> 1);
 const DETAIL_RIGHT = ROUND ? W - 50 : CONTENT_W - MARGIN;
 const STATS_MAX = ROUND ? 180 : CONTENT_W - 12;
-const MENU_LEFT = ROUND ? 55 : 0;
-const MENU_WIDTH = ROUND ? 150 : CONTENT_W;
 
 const fontTime = new render.Font("Roboto-Bold", 49);
 const fontSuffix = new render.Font("Gothic-Bold", 14);
@@ -121,10 +128,9 @@ function drawNoGps(x, y) {
 	const cx = x + 8;
 	const cy = y + 8;
 	for (let angle = 0; angle < 6.283; angle += 0.2)
-		render.drawPixel(textColor, Math.round(cx + Math.cos(angle) * 7), Math.round(cy + Math.sin(angle) * 7));
+		render.fillRectangle(textColor, Math.round(cx + Math.cos(angle) * 7), Math.round(cy + Math.sin(angle) * 7), 1, 1);
 	for (let i = -5; i <= 5; i++) {
-		render.drawPixel(textColor, cx + i, cy + i);
-		render.drawPixel(textColor, cx + i + 1, cy + i);
+		render.fillRectangle(textColor, cx + i, cy + i, 2, 1);
 	}
 }
 
@@ -135,93 +141,100 @@ function drawTriangle(cx, baseY, half, height, color) {
 	}
 }
 
-/** The two-peak mark from the app icon: taller left peak with a snow cap. */
-function drawPeaks(cx, baseY, height) {
-	const scale = height / 22;
-	const leftHalf = Math.round(9 * scale);
-	const rightHalf = Math.round(6.5 * scale);
-	const rightHeight = Math.round(16 * scale);
-	const leftCx = cx - Math.round(4 * scale);
-	const rightCx = leftCx + Math.round(10.5 * scale);
-	const topY = baseY - height + 1;
-
-	drawTriangle(leftCx, baseY, leftHalf, height, textColor);
-
-	const capTop = topY + Math.round(4 * scale);
-	const capHeight = Math.round(8 * scale);
-	const capHalf = Math.max(2, Math.round(3 * scale));
+/** Snow cap for a peak: a white triangle with two black teeth along its base. */
+function drawSnowCap(cx, topY, height, half, scale) {
+	const capTop = topY + Math.round(height * 0.18);
+	const capHeight = Math.max(3, Math.round(height * 0.36));
+	const capHalf = Math.max(2, Math.round(half * 0.35));
 	const capBase = capTop + capHeight - 1;
-	drawTriangle(leftCx, capBase, capHalf, capHeight, bgColor);
+	drawTriangle(cx, capBase, capHalf, capHeight, bgColor);
 	const tooth = Math.max(1, Math.round(scale));
 	const gap = Math.max(1, Math.round(capHalf * 0.4));
-	render.fillRectangle(textColor, leftCx - gap, capBase - tooth - 1, tooth, tooth + 2);
-	render.fillRectangle(textColor, leftCx + gap, capBase - tooth, tooth, tooth + 1);
+	render.fillRectangle(textColor, cx - gap, capBase - tooth - 1, tooth, tooth + 2);
+	render.fillRectangle(textColor, cx + gap, capBase - tooth, tooth, tooth + 1);
+}
 
+/**
+ * Four-peak mark for the main face: a small left peak, the original tall left
+ * peak, the original short right peak, and a big snow-capped back peak on the
+ * right. The back peaks are drawn first so the front pair overlaps them.
+ */
+function drawPeaks(cx, baseY, height) {
+	const scale = height / 22;
+	const smallCx = cx - Math.round(19.5 * scale);
+	const leftCx = cx - Math.round(9.5 * scale);
+	const rightCx = cx + Math.round(scale);
+	const bigCx = cx + Math.round(14.5 * scale);
+
+	const smallHeight = Math.round(12 * scale);		// 75% of the right peak
+	const smallHalf = Math.round(5 * scale);
+	const leftHeight = height;
+	const leftHalf = Math.round(9 * scale);
+	const rightHeight = Math.round(16 * scale);
+	const rightHalf = Math.round(6.5 * scale);
+	const bigHeight = Math.round(30 * scale);
+	const bigHalf = Math.round(10 * scale);
+
+	drawTriangle(bigCx, baseY, bigHalf, bigHeight, textColor);
+	drawSnowCap(bigCx, baseY - bigHeight + 1, bigHeight, bigHalf, scale);
+
+	drawTriangle(leftCx, baseY, leftHalf, leftHeight, textColor);
+	drawSnowCap(leftCx, baseY - leftHeight + 1, leftHeight, leftHalf, scale);
+
+	// The small left peak sits in front of the tall left peak.
+	drawTriangle(smallCx, baseY, smallHalf, smallHeight, textColor);
+	render.drawLine(smallCx, baseY - smallHeight + 1, smallCx + smallHalf, baseY, bgColor, 1);
+
+	// The small right peak sits in front of both the tall left peak and the big
+	// right peak, so it gets a separator line on each side.
 	drawTriangle(rightCx, baseY, rightHalf, rightHeight, textColor);
 	render.drawLine(rightCx, baseY - rightHeight + 1, rightCx - rightHalf, baseY, bgColor, 1);
+	render.drawLine(rightCx, baseY - rightHeight + 1, rightCx + rightHalf, baseY, bgColor, 1);
 }
 
 function drawStatusIcons() {
-	if (!settings.paused && !statusNoGps)
+	const gps = !settings.paused && !isDayClosed() && statusNoGps;
+	if (!settings.paused && !gps)
 		return;
 	const y = H - (ROUND ? 42 : 32);
-	const items = [];
+	const x = CONTENT_CENTER - 8;
 	if (settings.paused)
-		items.push("pause");
-	if (statusNoGps)
-		items.push("gps");
-	let x = CONTENT_CENTER - ((items.length === 1 ? 16 : 36) >> 1);
-	for (const item of items) {
-		if (item === "pause")
-			drawPause(x, y);
-		else
-			drawNoGps(x, y);
-		x += 19;
-	}
+		drawPause(x, y);
+	else
+		drawNoGps(x, y);
 }
 
 function isDayClosed() {
-	return store.isClosed();
+	return !!settings.closed;
 }
 
 function todayKey() {
-	return store.todayDate() || Core.dayKey(new Date());
+	return phoneState ? phoneState.today.date : Fmt.dayKey(new Date());
 }
 
 function yesterdayKey() {
 	const date = new Date();
 	date.setDate(date.getDate() - 1);
-	return Core.dayKey(date);
+	return Fmt.dayKey(date);
 }
 
 function currentSeason() {
-	return Core.currentSeasonKey(new Date(), settings);
+	return phoneState ? phoneState.season.key : Fmt.currentSeasonKey(new Date(), settings);
 }
 
 function displayedDay() {
 	if (!selectedDayKey)
 		return null;
-	if (selectedDayKey === todayKey()) {
-		const stats = store.todayStats();
-		const phone = history.day[selectedDayKey];
-		return {
-			date: selectedDayKey,
-			vertical: stats.vertical,
-			runs: stats.runs,
-			first: stats.first,
-			last: stats.last,
-			longest: stats.longest,
-			average: stats.average,
-			older: phone ? phone.older : null,
-			newer: phone ? phone.newer : null,
-		};
-	}
+	if (phoneState && selectedDayKey === phoneState.today.date)
+		return phoneState.today;
 	return history.day[selectedDayKey] || null;
 }
 
 function displayedSeason() {
 	if (!selectedSeasonKey)
 		return null;
+	if (phoneState && selectedSeasonKey === phoneState.season.key)
+		return phoneState.season;
 	return history.season[selectedSeasonKey] || null;
 }
 
@@ -230,13 +243,13 @@ function dayTitle(key) {
 		return "TODAY";
 	if (key === yesterdayKey())
 		return "YESTERDAY";
-	return Core.formatDateShort(key);
+	return Fmt.formatDateShort(key);
 }
 
 function drawMain() {
 	drawPeaks(CONTENT_CENTER, ROUND ? 78 : 70, ROUND ? 48 : 44);
 
-	const clock = Core.formatClock(new Date(), watch.hour12);
+	const clock = Fmt.formatClock(new Date(), watch.hour12);
 	const digitWidth = render.getTextWidth(clock.text, fontTime);
 	const suffixWidth = clock.suffix ? render.getTextWidth(clock.suffix, fontSuffix) : 0;
 	const gap = clock.suffix ? 4 : 0;
@@ -251,9 +264,11 @@ function drawMain() {
 			baseline - fontSuffix.ascent);
 	}
 
-	const stats = store.todayStats();
-	const statsText = stats.runs + (stats.runs === 1 ? " RUN  " : " RUNS  ") +
-		Core.formatVertical(stats.vertical, settings.units);
+	const today = phoneState ? phoneState.today : null;
+	const runs = today ? today.runs : 0;
+	const vertical = today ? today.vertical : 0;
+	const statsText = runs + (runs === 1 ? " RUN  " : " RUNS  ") +
+		Fmt.formatVertical(vertical, settings.units);
 	let statsFont = fontStats;
 	if (render.getTextWidth(statsText, statsFont) > STATS_MAX)
 		statsFont = fontRowBold;
@@ -265,24 +280,24 @@ function detailData() {
 	const units = settings.units;
 	if (currentScreen === "season") {
 		const season = frameSeason;
-		const label = season ? season.label : Core.seasonLabel(selectedSeasonKey);
+		const label = season ? season.label : Fmt.seasonLabel(selectedSeasonKey);
 		return [label, [
 			["Days", season ? String(season.days) : "--"],
-			["Vertical", season ? Core.formatVertical(season.vertical, units) : "--"],
+			["Vertical", season ? Fmt.formatVertical(season.vertical, units) : "--"],
 			["Runs", season ? String(season.runs) : "--"],
-			["Avg / day", season ? Core.formatAverage(season.averageVertical, units) : "--"],
-			["Best day", season && season.bestDay ? Core.formatDateShort(season.bestDay.date) : "--"],
+			["Avg / day", season ? Fmt.formatAverage(season.averageVertical, units) : "--"],
+			["Best day", season && season.bestDay ? Fmt.formatDateShort(season.bestDay.date) : "--"],
 		]];
 	}
 	const day = frameDay;
 	const title = selectedDayKey ? dayTitle(selectedDayKey) : "TODAY";
 	return [title, [
-		["Vertical", day ? Core.formatVertical(day.vertical, units) : "--"],
+		["Vertical", day ? Fmt.formatVertical(day.vertical, units) : "--"],
 		["Runs", day ? String(day.runs) : "--"],
-		["First", day && day.first ? Core.formatTime(new Date(day.first), watch.hour12) : "--"],
-		["Last", day && day.last ? Core.formatTime(new Date(day.last), watch.hour12) : "--"],
-		["Average", day ? Core.formatAverage(day.average, units) : "--"],
-		["Longest", day ? Core.formatVertical(day.longest, units) : "--"],
+		["First", day && day.first ? Fmt.formatTime(new Date(day.first), watch.hour12) : "--"],
+		["Last", day && day.last ? Fmt.formatTime(new Date(day.last), watch.hour12) : "--"],
+		["Average", day ? Fmt.formatAverage(day.average, units) : "--"],
+		["Longest", day ? Fmt.formatVertical(day.longest, units) : "--"],
 	]];
 }
 
@@ -297,44 +312,6 @@ function drawDetail() {
 		render.drawText(data[1][i][0], fontRow, textColor, MARGIN, y);
 		drawRight(data[1][i][1], fontRowBold, DETAIL_RIGHT, y);
 	}
-}
-
-function drawChevron(cx, cy, up) {
-	for (let i = 0; i < 5; i++) {
-		const half = up ? i : 4 - i;
-		render.fillRectangle(textColor, cx - half, cy + i, half * 2 + 1, 1);
-	}
-}
-
-function drawMenu() {
-	const top = ROUND ? 26 : 2;
-	const left = MENU_LEFT;
-	const width = MENU_WIDTH;
-	const rowHeight = fontRow.height + 10;
-	const listTop = top + 8;
-	const listBottom = H - 14;
-	let visible = Math.floor((listBottom - listTop) / rowHeight);
-	if (visible < 3)
-		visible = 3;
-
-	if (menuIndex < menuScroll)
-		menuScroll = menuIndex;
-	else if (menuIndex >= menuScroll + visible)
-		menuScroll = menuIndex - visible + 1;
-
-	for (let i = 0; i < visible && menuScroll + i < MENU.length; i++) {
-		const index = menuScroll + i;
-		const y = listTop + i * rowHeight;
-		const selected = index === menuIndex;
-		if (selected)
-			render.fillRectangle(textColor, left + 2, y + 1, 3, fontRow.height - 2);
-		render.drawText(menuLabel(MENU[index]), selected ? fontRowBold : fontRow, textColor, left + 12, y);
-	}
-
-	if (menuScroll > 0)
-		drawChevron(left + (width >> 1), top + 2, true);
-	if (menuScroll + visible < MENU.length)
-		drawChevron(left + (width >> 1), H - 9, false);
 }
 
 /* ------------------------------------------------------------------ */
@@ -463,9 +440,7 @@ function drawActionBar() {
 	}
 
 	let icons;
-	if (menuOpen)
-		icons = ["up", "check", "down"];
-	else if (currentScreen === "main")
+	if (currentScreen === "main")
 		icons = ["season", "more", "today"];
 	else if (currentScreen === "today") {
 		const day = frameDay;
@@ -487,9 +462,7 @@ function draw() {
 	render.begin();
 	render.fillRectangle(bgColor, 0, 0, W, H);
 	drawActionBar();
-	if (menuOpen)
-		drawMenu();
-	else if (currentScreen === "main")
+	if (currentScreen === "main")
 		drawMain();
 	else
 		drawDetail();
@@ -497,35 +470,90 @@ function draw() {
 }
 
 /* ------------------------------------------------------------------ */
-/* Menu                                                                */
+/* Phone state cache                                                   */
 /* ------------------------------------------------------------------ */
 
-const MENU = ["day", "pause", "undo", "units", "vibration", "sync"];
+function applyPhoneSettings(source) {
+	source = source || {};
+	const theme = Object.assign({}, DISPLAY_DEFAULTS.theme,
+		source.theme && typeof source.theme === "object" ? source.theme : {});
+	settings = {
+		units: source.units === "imperial" ? "imperial" : "metric",
+		vibration: source.vibration !== false,
+		paused: !!source.paused,
+		closed: !!source.closed,
+		seasonMode: source.seasonMode === "south" ? "south" : "north",
+		theme,
+	};
+}
 
-function menuLabel(id) {
-	if (id === "day")
-		return isDayClosed() ? "Resume Day" : "End Day";
-	if (id === "pause")
-		return settings.paused ? "Resume" : "Pause";
-	if (id === "units")
-		return "Units: " + (settings.units === "metric" ? "Metric" : "Imperial");
-	if (id === "vibration")
-		return "Vibration: " + (settings.vibration ? "On" : "Off");
-	return id === "undo" ? "Undo Last Lift" : "Sync Now";
+function updateLocalSettings(patch) {
+	const next = Object.assign({}, settings, patch);
+	if (phoneState)
+		phoneState.settings = Object.assign({}, phoneState.settings, patch);
+	applyPhoneSettings(next);
+	saveCache();
+}
+
+function saveCache() {
+	try {
+		storage.setItem(PHONE_KEY, JSON.stringify({ v: 1, state: phoneState }));
+	}
+	catch (error) {
+		console.log("slide-stats: cache save failed: " + error);
+	}
+}
+
+function loadCache() {
+	try {
+		const raw = storage.getItem(PHONE_KEY);
+		if (raw) {
+			const cached = JSON.parse(raw);
+			if (cached && cached.v === 1 && cached.state && cached.state.today && cached.state.season)
+				phoneState = cached.state;
+		}
+	}
+	catch (error) {
+		console.log("slide-stats: cache load failed: " + error);
+	}
+	if (phoneState) {
+		applyPhoneSettings(phoneState.settings || {});
+		statusNoGps = !(phoneState.status && phoneState.status.gps);
+		remember("day", phoneState.today.date, phoneState.today);
+		remember("season", phoneState.season.key, phoneState.season);
+	}
+	else
+		applyPhoneSettings(DISPLAY_DEFAULTS);
+}
+
+function applyState(raw) {
+	let state;
+	try {
+		state = JSON.parse(raw);
+	}
+	catch (error) {
+		console.log("slide-stats: bad state: " + error);
+		return;
+	}
+	if (!state || !state.today || !state.season)
+		return;
+
+	phoneState = state;
+	applyPhoneSettings(state.settings || {});
+	statusNoGps = !(state.status && state.status.gps);
+	remember("day", state.today.date, state.today);
+	remember("season", state.season.key, state.season);
+	updateTheme();
+	saveCache();
+	draw();
 }
 
 /* ------------------------------------------------------------------ */
 /* Navigation                                                          */
 /* ------------------------------------------------------------------ */
 
-function updateAll(nextSettings) {
-	settings = nextSettings || store.getSettings();
-	draw();
-}
-
 function showScreen(name) {
 	currentScreen = name;
-	menuOpen = false;
 	queryQueue.length = 0;
 	if (name === "today") {
 		selectedDayKey = todayKey();
@@ -538,106 +566,9 @@ function showScreen(name) {
 	draw();
 }
 
-function openMenu() {
-	menuOpen = true;
-	menuIndex = 0;
-	menuScroll = 0;
-	draw();
-}
-
-function closeMenu() {
-	menuOpen = false;
-	draw();
-}
-
 /* ------------------------------------------------------------------ */
-/* GPS and detection                                                   */
+/* Vibrations                                                          */
 /* ------------------------------------------------------------------ */
-
-function startGps() {
-	if (location)
-		return;
-	try {
-		location = new Location({
-			onSample() {
-				const sample = this.sample();
-				if (sample)
-					handleSample(sample);
-			},
-			onError() {
-				statusNoGps = true;
-				draw();
-			},
-		});
-		location.configure({ enableHighAccuracy: true, timeout: 5000, maximumAge: 0 });
-	}
-	catch (error) {
-		console.log("slide-stats: gps start failed: " + error);
-		statusNoGps = true;
-	}
-}
-
-function stopGps() {
-	if (!location)
-		return;
-	try {
-		location.close();
-	}
-	catch (error) {
-		console.log("slide-stats: gps close failed: " + error);
-	}
-	location = null;
-}
-
-function handleSample(sample) {
-	const altitude = sample.altitude;
-	if (typeof altitude !== "number" || !isFinite(altitude)) {
-		if (!statusNoGps) {
-			statusNoGps = true;
-			draw();
-		}
-		return;
-	}
-	if (statusNoGps) {
-		statusNoGps = false;
-		draw();
-	}
-
-	if (settings.paused || isDayClosed())
-		return;
-
-	const now = Date.now();
-	const interval = settings.sampleIntervalMs || 10000;
-	if (now - lastProcessed < interval)
-		return;
-	lastProcessed = now;
-
-	handleEvents(detector.addSample({
-		t: now,
-		altitude,
-		altitudeAccuracy: sample.altitudeAccuracy,
-		latitude: sample.latitude,
-		longitude: sample.longitude,
-	}));
-	store.setActiveLift(detector.snapshot());
-}
-
-function handleEvents(events) {
-	for (const event of events) {
-		if (event.type === "start") {
-			console.log("slide-stats: lift start");
-			vibrate("start");
-		}
-		else if (event.type === "end") {
-			store.addLift(event.lift);
-			console.log("slide-stats: lift end " + Math.round(event.lift.gain) + " m");
-			vibrate("end");
-			lastProcessed = 0;
-			updateAll(settings);
-			flushOutbox();
-		}
-	}
-}
 
 // Mirrored rhythms: accelerating when a lift starts, decelerating when it ends.
 const VIBE_START = [100, 80, 160, 80, 240];
@@ -654,6 +585,21 @@ function vibrate(kind) {
 	}
 }
 
+function handlePhoneEvent(raw) {
+	let event;
+	try {
+		event = JSON.parse(raw);
+	}
+	catch (error) {
+		console.log("slide-stats: bad event: " + error);
+		return;
+	}
+	if (!event || (event.type !== "start" && event.type !== "end"))
+		return;
+	statusNoGps = false;
+	vibrate(event.type);
+}
+
 /* ------------------------------------------------------------------ */
 /* Watch-phone sync                                                    */
 /* ------------------------------------------------------------------ */
@@ -661,14 +607,17 @@ function vibrate(kind) {
 function setupMessage() {
 	try {
 		message = new Message({
-			keys: ["Sync", "Ack", "Settings", "Query", "Data", "Purge"],
+			keys: MESSAGE_KEYS,
 			input: 1024,
 			output: 1024,
 			onReadable() {
 				const msg = this.read();
-				const ack = msg.get("Ack");
-				if (ack)
-					handleAck(ack);
+				const state = msg.get("State");
+				if (state)
+					applyState(state);
+				const event = msg.get("Event");
+				if (event)
+					handlePhoneEvent(event);
 				const incoming = msg.get("Settings");
 				if (incoming)
 					applySettings(incoming);
@@ -681,13 +630,13 @@ function setupMessage() {
 			},
 			onWritable() {
 				messageReady = true;
-				flushOutbox();
+				flushCommands();
+				requestRefresh(false);
 				ensureScreenSummary();
 				flushQuery();
 			},
 			onSuspend() {
 				messageReady = false;
-				sendingLift = false;
 				queryQueue.length = 0;
 				querying = false;
 				activeQuery = null;
@@ -703,43 +652,55 @@ function setupMessage() {
 	}
 }
 
-function handleAck(payload) {
+function writeMessage(payload) {
+	if (!message || !messageReady)
+		return false;
 	try {
-		const data = JSON.parse(payload);
-		if (data && data.id)
-			store.ack(data.id);
+		message.write(payload);
+		messageReady = false;
+		return true;
 	}
 	catch (error) {
-		console.log("slide-stats: bad ack: " + error);
+		messageReady = false;
+		console.log("slide-stats: message write failed: " + error);
+		return false;
 	}
-	sendingLift = false;
-	if (ackTimer) {
-		clearTimeout(ackTimer);
-		ackTimer = null;
-	}
-	flushOutbox();
-	flushQuery();
 }
 
-function flushOutbox() {
-	if (!message || !messageReady || sendingLift)
+function sendCommand(command) {
+	if (commandQueue.length >= 8)
 		return;
-	const record = store.peekOutbox();
-	if (!record)
+	commandQueue.push(command);
+	flushCommands();
+}
+
+function flushCommands() {
+	if (!commandQueue.length)
 		return;
-	sendingLift = true;
-	try {
-		message.write(new Map([["Sync", JSON.stringify(record)]]));
-		ackTimer = setTimeout(() => {
-			sendingLift = false;
-			ackTimer = null;
-			flushOutbox();
-		}, 15000);
-	}
-	catch (error) {
-		sendingLift = false;
-		console.log("slide-stats: sync write failed: " + error);
-	}
+	const command = commandQueue[0];
+	if (!writeMessage(new Map([["Command", JSON.stringify(command)]])))
+		return;
+	commandQueue.shift();
+	if (commandQueue.length)
+		setTimeout(flushCommands, 250);
+}
+
+function stateStale() {
+	if (!phoneState)
+		return true;
+	if (!phoneState.today || phoneState.today.date !== Fmt.dayKey(new Date()))
+		return true;
+	return Date.now() - (phoneState.generatedAt || 0) > 300000;
+}
+
+function requestRefresh(force) {
+	const at = Date.now();
+	if (!force && !stateStale())
+		return;
+	if (!force && at - lastRefreshAt < 15000)
+		return;
+	lastRefreshAt = at;
+	sendCommand({ type: "refresh" });
 }
 
 function queueSummary(kind, key) {
@@ -788,27 +749,26 @@ function remember(kind, key, summary) {
 }
 
 function flushQuery() {
-	if (!message || !messageReady || querying || sendingLift || !queryQueue.length)
+	if (querying || !queryQueue.length)
 		return;
 	activeQuery = queryQueue.shift();
 	querying = true;
-	try {
-		message.write(new Map([["Query", JSON.stringify({ v: 1, kind: activeQuery.kind, key: activeQuery.key })]]));
-		queryTimer = setTimeout(() => {
-			querying = false;
-			if (activeQuery)
-				queryQueue.unshift(activeQuery);
-			activeQuery = null;
-			queryTimer = null;
-			flushQuery();
-		}, 8000);
-	}
-	catch (error) {
+	if (!writeMessage(new Map([["Query", JSON.stringify({
+		v: 1, kind: activeQuery.kind, key: activeQuery.key,
+	})]]))) {
 		querying = false;
 		queryQueue.unshift(activeQuery);
 		activeQuery = null;
-		console.log("slide-stats: query write failed: " + error);
+		return;
 	}
+	queryTimer = setTimeout(() => {
+		querying = false;
+		if (activeQuery)
+			queryQueue.unshift(activeQuery);
+		activeQuery = null;
+		queryTimer = null;
+		flushQuery();
+	}, 8000);
 }
 
 function handlePurge(raw) {
@@ -822,11 +782,11 @@ function handlePurge(raw) {
 	}
 	if (!data || !data.date)
 		return;
-	if (store.purgeDay(data.date)) {
-		detector.reset();
-		lastProcessed = 0;
-		updateAll(settings);
-	}
+	delete history.day[data.date];
+	if (selectedDayKey === data.date && (!phoneState || data.date !== phoneState.today.date))
+		selectedDayKey = todayKey();
+	requestRefresh(true);
+	draw();
 }
 
 function handleData(raw) {
@@ -856,41 +816,17 @@ function handleData(raw) {
 	flushQuery();
 }
 
-function sendSettings(nextSettings) {
-	if (!message || !messageReady)
-		return;
+function applySettings(raw) {
 	try {
-		message.write(new Map([["Settings", JSON.stringify(nextSettings || store.getSettings())]]));
-	}
-	catch (error) {
-		console.log("slide-stats: settings write failed: " + error);
-	}
-}
-
-function applySettings(json) {
-	try {
-		const next = JSON.parse(json);
-		settings = store.setSettings(next);
+		const next = JSON.parse(raw);
+		if (!next || typeof next !== "object")
+			return;
+		if (phoneState)
+			phoneState.settings = Object.assign({}, phoneState.settings, next);
+		applyPhoneSettings(Object.assign({}, settings, next));
 		updateTheme();
-		detector.setOptions(settings.detection);
-		history.day = {};
-		history.season = {};
-		queryQueue.length = 0;
-		if (currentScreen === "season") {
-			selectedSeasonKey = currentSeason();
-			queueSummary("season", selectedSeasonKey);
-		}
-		else if (currentScreen === "today" && selectedDayKey && selectedDayKey !== todayKey()) {
-			queueSummary("day", selectedDayKey);
-		}
-		if (settings.paused || isDayClosed()) {
-			detector.reset();
-			store.setActiveLift(null);
-			stopGps();
-		}
-		else
-			startGps();
-		updateAll(settings);
+		saveCache();
+		draw();
 	}
 	catch (error) {
 		console.log("slide-stats: bad settings: " + error);
@@ -901,89 +837,165 @@ function applySettings(json) {
 /* Actions                                                             */
 /* ------------------------------------------------------------------ */
 
-function togglePause() {
-	const paused = !settings.paused;
-	settings = store.setPaused(paused);
-	sendSettings(settings);
-	if (paused) {
-		detector.reset();
-		store.setActiveLift(null);
-		stopGps();
-	}
-	else {
-		lastProcessed = 0;
-		startGps();
-	}
-	updateAll(settings);
+function setPaused(paused) {
+	if (settings.paused === paused)
+		return;
+	updateLocalSettings({ paused });
+	sendCommand({ type: "pause", value: paused });
+	draw();
 }
 
-function toggleDay() {
-	if (isDayClosed()) {
-		store.resumeDay();
-		lastProcessed = 0;
-		startGps();
-	}
-	else {
-		store.endDay();
-		detector.reset();
-		stopGps();
-	}
-	updateAll(settings);
+function setClosed(closed) {
+	if (settings.closed === closed)
+		return;
+	updateLocalSettings({ closed });
+	sendCommand({ type: "day", value: closed });
+	draw();
 }
 
 function undoLastLift() {
-	const removed = store.undoLastLift();
-	if (removed) {
-		updateAll(settings);
-		flushOutbox();
+	sendCommand({ type: "undo" });
+}
+
+function setUnits(units) {
+	if (settings.units === units)
+		return;
+	updateLocalSettings({ units });
+	sendCommand({ type: "units", value: units });
+	draw();
+}
+
+function setVibration(vibration) {
+	if (settings.vibration === vibration)
+		return;
+	updateLocalSettings({ vibration });
+	sendCommand({ type: "vibration", value: vibration });
+	draw();
+}
+
+// Keep in sync with the ACTION enum in src/c/ffi.c.
+const ACTION = {
+	dayClose: 1,
+	dayOpen: 2,
+	pause: 3,
+	resume: 4,
+	undo: 5,
+	metric: 6,
+	imperial: 7,
+	vibrationOn: 8,
+	vibrationOff: 9,
+	sync: 10,
+};
+
+function handleAction(action) {
+	if (action === ACTION.dayClose)
+		setClosed(true);
+	else if (action === ACTION.dayOpen)
+		setClosed(false);
+	else if (action === ACTION.pause)
+		setPaused(true);
+	else if (action === ACTION.resume)
+		setPaused(false);
+	else if (action === ACTION.undo)
+		undoLastLift();
+	else if (action === ACTION.metric)
+		setUnits("metric");
+	else if (action === ACTION.imperial)
+		setUnits("imperial");
+	else if (action === ACTION.vibrationOn)
+		setVibration(true);
+	else if (action === ACTION.vibrationOff)
+		setVibration(false);
+	else if (action === ACTION.sync)
+		requestRefresh(true);
+}
+
+function nativeMenu() {
+	if (typeof Natives === "undefined" || !Natives.slide_action_menu_open)
+		return null;
+	return Natives;
+}
+
+function pollActionMenu() {
+	actionMenuTimer = null;
+	try {
+		const native = nativeMenu();
+		if (!native) {
+			actionMenu = false;
+			draw();
+			return;
+		}
+		const result = native.slide_action_menu_result();
+		if (result === 0) {
+			actionMenuTimer = setTimeout(pollActionMenu, 150);
+			return;
+		}
+		actionMenu = false;
+		lastMenuCloseAt = Date.now();
+		if (result > 0)
+			handleAction(result);
+		draw();
+
+		// A native window can leave the display's destination bitmap offset until
+		// the firmware repaints the app layer. Draw once more after that happens.
+		if (menuRedrawTimer)
+			clearTimeout(menuRedrawTimer);
+		menuRedrawTimer = setTimeout(() => {
+			menuRedrawTimer = null;
+			draw();
+		}, 250);
+	}
+	catch (error) {
+		actionMenu = false;
+		console.log("action menu poll failed: " + error);
+		draw();
 	}
 }
 
-function toggleUnits() {
-	const units = settings.units === "metric" ? "imperial" : "metric";
-	settings = store.setSettings({ units });
-	sendSettings(settings);
-	updateAll(settings);
-}
-
-function toggleVibration() {
-	settings = store.setSettings({ vibration: !settings.vibration });
-	sendSettings(settings);
-	updateAll(settings);
-}
-
-function activateMenu() {
-	const item = MENU[menuIndex];
-	if (!item)
+function openActionMenu() {
+	if (actionMenu)
 		return;
-	switch (item) {
-		case "day":
-			toggleDay();
-			closeMenu();
-			break;
-		case "pause":
-			togglePause();
-			closeMenu();
-			break;
-		case "undo":
-			undoLastLift();
-			closeMenu();
-			break;
-		case "units":
-			toggleUnits();
-			break;
-		case "vibration":
-			toggleVibration();
-			break;
-		case "sync":
-			flushOutbox();
-			closeMenu();
-			break;
+	const native = nativeMenu();
+	if (!native)
+		return;
+	if (menuRedrawTimer) {
+		clearTimeout(menuRedrawTimer);
+		menuRedrawTimer = null;
+	}
+	const flags = (isDayClosed() ? 1 : 0) |
+		(settings.paused ? 2 : 0) |
+		(settings.units === "imperial" ? 4 : 0) |
+		(settings.vibration ? 0 : 8);
+	const accent = settings.theme && typeof settings.theme.accent === "number"
+		? settings.theme.accent : 0;
+	try {
+		if (native.slide_action_menu_open(flags, accent) !== 1)
+			return;
+		actionMenu = true;
+		pollActionMenu();
+	}
+	catch (error) {
+		actionMenu = false;
+		console.log("action menu failed: " + error);
 	}
 }
 
 function exitApp() {
-	stopGps();
+	if (actionMenuTimer) {
+		clearTimeout(actionMenuTimer);
+		actionMenuTimer = null;
+	}
+	if (menuRedrawTimer) {
+		clearTimeout(menuRedrawTimer);
+		menuRedrawTimer = null;
+	}
+	const native = nativeMenu();
+	if (native) {
+		try {
+			native.slide_action_menu_close();
+		}
+		catch (error) {}
+	}
 	if (message) {
 		try {
 			message.close();
@@ -991,7 +1003,6 @@ function exitApp() {
 		catch (error) {}
 		message = null;
 	}
-	store.save();
 	watch.exit();
 }
 
@@ -1045,24 +1056,18 @@ function cycleScreen(delta) {
 new Button({
 	types: ["select", "up", "down", "back"],
 	onPush(down, type) {
-		if (!down)
+		if (actionMenu)
 			return;
 
-		if (menuOpen) {
-			if (type === "up") {
-				menuIndex = (menuIndex + MENU.length - 1) % MENU.length;
-				draw();
-			}
-			else if (type === "down") {
-				menuIndex = (menuIndex + 1) % MENU.length;
-				draw();
-			}
-			else if (type === "select")
-				activateMenu();
-			else if (type === "back")
-				closeMenu();
+		// Open on release so the click that launches the native menu is not
+		// also delivered to the new menu as a selection.
+		if (type === "select") {
+			if (!down && currentScreen === "main")
+				openActionMenu();
 			return;
 		}
+		if (!down)
+			return;
 
 		if (type === "up") {
 			if (currentScreen === "main")
@@ -1080,48 +1085,45 @@ new Button({
 			else if (currentScreen === "season")
 				stepSeason(1);
 		}
-		else if (type === "select") {
-			if (currentScreen === "main")
-				openMenu();
-		}
 		else if (type === "back") {
 			if (currentScreen !== "main")
 				showScreen("main");
-			else
+			else if (Date.now() - lastMenuCloseAt > 1000)
 				exitApp();
 		}
 	},
 });
 
 watch.addEventListener("minutechange", () => {
-	if (!menuOpen && currentScreen === "main")
+	if (!actionMenu && currentScreen === "main")
 		draw();
 });
 
 watch.addEventListener("daychange", () => {
-	const result = store.ensureToday();
-	if (result.changed) {
-		detector.reset();
-		store.setActiveLift(null);
-		lastProcessed = 0;
-		updateAll(settings);
-	}
+	if (currentScreen === "today")
+		selectedDayKey = Fmt.dayKey(new Date());
+	requestRefresh(true);
+	draw();
 });
 
 watch.addEventListener("didFocus", inFocus => {
-	if (inFocus) {
-		ensureScreenSummary();
-		updateAll(settings);
+	if (!inFocus)
+		return;
+	if (actionMenu) {
+		if (!actionMenuTimer)
+			pollActionMenu();
+		return;
 	}
+	requestRefresh(false);
+	ensureScreenSummary();
+	draw();
 });
 
 /* ------------------------------------------------------------------ */
 /* Start                                                               */
 /* ------------------------------------------------------------------ */
 
+loadCache();
 updateTheme();
 setupMessage();
-updateAll(settings);
-
-if (!settings.paused && !isDayClosed())
-	startGps();
+draw();

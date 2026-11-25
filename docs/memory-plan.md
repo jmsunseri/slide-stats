@@ -1,12 +1,13 @@
 # Slide Stats — memory and runtime reliability plan
 
 Working plan for the memory/layout issues identified in the architecture review, plus the
-ActionMenu experiment. Nothing in this document is implemented yet. It is intended to be the
-reference we work from, so each change can be justified against a measured budget instead of
-being discovered by a failed launch.
+ActionMenu experiment. See the implementation log for what has actually shipped. It is
+intended to be the reference we work from, so each change can be justified against a measured
+budget instead of being discovered by a failed launch.
 
 Plan written against `60c9238`. The Phase 0, L1–L5, option-2, and slot-pool work was later
-committed to `main`; the phone-authoritative redesign continues on a feature branch.
+committed to `main`; the phone-authoritative redesign is implemented on a feature branch
+pending review.
 
 ## Contents
 
@@ -810,6 +811,10 @@ dominant cost.
 
 ### H2. Native ActionMenu and the startup budget
 
+**Status:** implemented after the phone-authoritative redesign freed the startup budget.
+The menu uses a small FFI shim, six root rows, and Units/Vibration submenus. See 12.10 for
+the measured result.
+
 **Files:** `src/c/ffi.c`, `src/c/mdbl.c`, `src/embeddedjs/main.js`, `src/embeddedjs/manifest.json`.
 
 **What we learned**
@@ -1286,3 +1291,44 @@ the test. No harness code remains.
 This makes H1 (removing the duplicate current-day/outbox representation) the highest-value
 runtime fix if the app needs to survive a fully offline day. A connected phone that drains the
 outbox is the normal case and keeps the state much smaller.
+
+### 12.10 Phone-authoritative redesign
+
+The phone-authoritative work moved lift detection, today's lifts, the outbox, and the day
+store off the watch. The watch now caches the phone's `State` and sends commands. See
+`docs/phone-authoritative.md` for the protocol.
+
+Measured after the redesign and the native ActionMenu (slot restored to 48,640):
+
+| Metric | Before (slot 47,616) | Phone redesign | + native menu |
+| --- | ---: | ---: | ---: |
+| App virtual size | 628 B | 628 B | **2,244 B** |
+| Archive | 35,935 B | 25,621 B | **26,245 B** |
+| XS pools | 78,336 B | 80,384 B | 80,384 B |
+| Mapper scratch + IDs + maps | 5,876 B | 4,346 B | 4,528 B |
+| **Hardware startup margin** | **+1,057 B** | **+11,877 B** | **+9,455 B** |
+
+`npm run check-memory` exits **0** and is above the 4 KiB target. The native ActionMenu
+costs about 1.7 KiB of margin (the C image grew by about 1.6 KiB while the archive
+shrank slightly) and is now implemented.
+
+The watch no longer stores lift records, so the 40-run and outbox stress limits in 12.8 and
+12.9 no longer describe the product: a 40-run day lives on the phone and the pushed watch
+state stays around **516 B**. The remaining runtime risk is the phone's geolocation lifecycle
+and AppMessage delivery, not watch storage.
+
+Recovered margin at `.slot = 48,640`: about **9.2 KiB** after the native ActionMenu. The
+ActionMenu experiment in H2 needed roughly 1–2 KiB of extra app image, which now fits with a
+large margin.
+
+The ActionMenu is a fixed FFI shim: six root rows, Units and Vibration submenus, and the
+theme accent in the crumb column. It opens on Select release so the launching click is not
+delivered to the menu. The C callback writes the selected action to a static result and JS
+polls it. The app window is the ActionMenu result window so Back cancel returns to the app.
+After a Back cancel on Gabbro the display destination bitmap needed a firmware repaint;
+`mdbl.c` installs an empty root-layer update proc and the JS marks the layer dirty and redraws
+after close.
+
+Tests: **95/95 pass**. Both targets build. Emulator checks covered launch, state push, Today,
+Season, history Query/Data, units, end/resume day, pause, native menu navigation and
+submenus, Back cancel, and both watch shapes.

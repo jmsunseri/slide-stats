@@ -12,7 +12,8 @@ const DEFAULT_SETTINGS = {
 	trips: true,
 	theme: {
 		background: 0xffffff,
-		accent: 0x000000,
+		// Pebble's second-darkest blue: GColorDukeBlue (#0000AA).
+		accent: 0x0000aa,
 		text: 0x000000,
 	},
 	detection: {

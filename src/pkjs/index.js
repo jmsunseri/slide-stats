@@ -1,8 +1,10 @@
 /*
- * PebbleKit JS: durable lift storage on the phone and the local Clay page.
+ * PebbleKit JS: authoritative lift storage, geolocation detection, and the
+ * local Clay page.
  *
- * The watch sends one lift record at a time and waits for an Ack. The phone
- * dedupes by date + seq, so retries are harmless.
+ * The phone owns detection and history. It pushes a compact State to the watch
+ * and answers Query messages. The legacy Sync/Ack path remains for older watch
+ * builds; the phone-authoritative watch never sends it.
  */
 
 const Clay = require("@rebble/clay");
@@ -12,6 +14,7 @@ const { buildConfig, buildPurgeMap } = require("./lib/clay-config");
 const { deleteDays } = require("./lib/purge");
 const { tabsComponent, clayTabsCustomFn } = require("./lib/clay-tabs");
 const { DEFAULT_SETTINGS, flattenSettings, applyClaySettings } = require("./lib/settings");
+const { createPhoneRuntime } = require("./lib/phone-runtime");
 
 const LIFTS_KEY = "ss.lifts";
 const SETTINGS_KEY = "ss.settings";
@@ -32,6 +35,7 @@ const REGISTRATION_CONFIG = [
 const clay = new Clay(REGISTRATION_CONFIG, clayTabsCustomFn, { autoHandleEvents: false });
 clay.registerComponent(tabsComponent);
 let purgeSnapshot = {};
+let phoneRuntime = null;
 
 function ensureClayMeta() {
 	try {
@@ -84,6 +88,39 @@ function loadSettings() {
 
 function saveSettings(settings) {
 	saveJson(SETTINGS_KEY, settings);
+}
+
+function sendState(state) {
+	Pebble.sendAppMessage(
+		{ State: JSON.stringify(state) },
+		function () {},
+		function (error) { console.log("slide-stats: state send failed: " + JSON.stringify(error)); }
+	);
+}
+
+function sendEvent(event) {
+	Pebble.sendAppMessage(
+		{ Event: JSON.stringify(event) },
+		function () {},
+		function (error) { console.log("slide-stats: event send failed: " + JSON.stringify(error)); }
+	);
+}
+
+function ensurePhoneRuntime() {
+	if (!phoneRuntime) {
+		phoneRuntime = createPhoneRuntime({
+			storage: {
+				getItem: key => localStorage.getItem(key),
+				setItem: (key, value) => localStorage.setItem(key, value),
+				removeItem: key => localStorage.removeItem(key),
+			},
+			loadSettings,
+			saveSettings,
+			onState: sendState,
+			onEvent: sendEvent,
+		});
+	}
+	return phoneRuntime;
 }
 
 function validPoints(points) {
@@ -179,7 +216,9 @@ function handleQuery(raw) {
 
 function handleSettings(raw) {
 	try {
-		saveSettings(JSON.parse(raw));
+		const settings = JSON.parse(raw);
+		const merged = phoneRuntime ? phoneRuntime.applySettings(settings) : settings;
+		saveSettings(merged);
 	}
 	catch (error) {
 		console.log("slide-stats: bad settings: " + error);
@@ -189,9 +228,8 @@ function handleSettings(raw) {
 Pebble.addEventListener("ready", function (event) {
 	console.log("slide-stats pkjs: ready");
 	moddableProxy.readyReceived(event);
-	const settings = loadSettings();
-	if (settings)
-		Pebble.sendAppMessage({ Settings: JSON.stringify(settings) });
+	if (!ensurePhoneRuntime().start())
+		ensurePhoneRuntime().sendState();
 });
 
 Pebble.addEventListener("appmessage", function (event) {
@@ -204,6 +242,8 @@ Pebble.addEventListener("appmessage", function (event) {
 		handleSettings(payload.Settings);
 	if (typeof payload.Query === "string")
 		handleQuery(payload.Query);
+	if (typeof payload.Command === "string")
+		ensurePhoneRuntime().handleCommand(payload.Command);
 });
 
 Pebble.addEventListener("showConfiguration", function () {
@@ -247,6 +287,18 @@ Pebble.addEventListener("webviewclosed", function (event) {
 			function (error) { console.log("slide-stats: purge send failed: " + JSON.stringify(error)); }
 		);
 	}
-	Pebble.sendAppMessage({ Settings: JSON.stringify(settings) });
+	ensurePhoneRuntime().applySettings(settings);
 	purgeSnapshot = {};
 });
+
+// Phone-authoritative probe. Disabled by default; set PHONE_PROBE to true
+// when testing geolocation and the shared detector on a device.
+const PHONE_PROBE = false;
+if (PHONE_PROBE) {
+	try {
+		require("./probe").start();
+	}
+	catch (error) {
+		console.log("phone-probe: load failed " + error);
+	}
+}

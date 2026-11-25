@@ -78,7 +78,7 @@ test("Clay page has Settings and Stats tabs with grouped items", () => {
 
 	const colors = items(config).filter(item => item.type === "color");
 	assert.deepEqual(colors.map(item => item.messageKey), ["themeBackground", "themeAccent", "themeText"]);
-	assert.deepEqual(colors.map(item => item.defaultValue), [0xffffff, 0x000000, 0x000000]);
+	assert.deepEqual(colors.map(item => item.defaultValue), [0xffffff, 0x0000aa, 0x000000]);
 	assert.ok(colors.every(item => item.sunlight === false));
 });
 

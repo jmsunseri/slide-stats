@@ -174,7 +174,7 @@ function buildConfig(summary, settings, lifts, purgeMap) {
 				sunlight: false,
 			},
 		] },
-		{ type: "text", defaultValue: "Accent colours the right-hand bar; its icons stay white, so pick a dark accent." },
+		{ type: "text", defaultValue: "Accent colours the right-hand bar and the menu crumb column; its icons stay white, so pick a dark accent. The default is Duke Blue." },
 		{ type: "heading", defaultValue: "Lift detection", size: 3 },
 		{
 			type: "text",
