@@ -21,20 +21,32 @@ not need a local detector or a local outbox.
 
 2. **The emulator does not provide altitude.**
    `pebble emu-set-location` returns latitude, longitude, and accuracy, but `altitude` and
-   `altitudeAccuracy` are `undefined`. The detector needs altitude. A real-phone check is
-   required before this redesign can be committed.
+   `altitudeAccuracy` are `undefined`.
 
-3. **Directly importing the watch ES module into PKJS fails.**
+3. **A real phone does provide altitude.**
+   Device logs showed:
+   `altitude=30.34`, `accuracy=18.17`, `altitudeAccuracy=undefined`.
+   The redesign is therefore viable. `altitudeAccuracy` is missing, but the detector accepts
+   undefined accuracy today (it only rejects finite values above the configured maximum).
+   The later protocol should decide whether to accept that, use horizontal `accuracy` as a
+   fallback, or rely on the median/descent filters.
+
+4. **Live positions are now fed into the detector.**
+   The probe logs `phone-probe: live start/end` alongside the position fields. The
+   `synthetic detector events=start,end` line is only the self-test.
+
+5. **Directly importing the watch ES module into PKJS fails.**
    `require("../embeddedjs/lib/core.js")` produces `SyntaxError: unsupported keyword: export`
    in PKJS. The watch uses ESM; the PKJS bundle does not transpile it.
 
-4. **A generated CommonJS detector works.**
+6. **A generated CommonJS detector works.**
    `tools/generate-pkjs-detector.mjs` extracts the pure detector from
    `src/embeddedjs/lib/core.js` and writes `src/pkjs/lib/detector.js`. The generated module
    runs in PKJS and detected a synthetic `start,end` trace.
 
-The probe is in `src/pkjs/probe.js` and is disabled by default. Set `PHONE_PROBE = true` in
-`src/pkjs/index.js` to run it.
+The probe is in `src/pkjs/probe.js`. It is controlled by `PHONE_PROBE` in
+`src/pkjs/index.js`; it is currently enabled on this test branch and should be disabled before
+merging the redesign.
 
 ## Proposed protocol
 
@@ -82,7 +94,8 @@ The existing `src/pkjs/lib/stats.js` already computes history summaries.
 
 ## Open questions
 
-- Does a real phone report `coords.altitude` and `altitudeAccuracy` to PKJS?
+- How should the phone compensate for `altitudeAccuracy=undefined`? Accept it, use horizontal
+  `accuracy` as a fallback, or rely on the detector's median/descent filters?
 - How fresh must the watch summary be while a lift is active?
 - What should the watch do with commands while disconnected?
 - Should the watch keep a small unacked command/state queue, or disable state-changing actions
